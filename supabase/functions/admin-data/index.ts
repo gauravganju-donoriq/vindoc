@@ -74,24 +74,19 @@ Deno.serve(async (req) => {
       console.log(`Assigned super_admin role to ${userEmail}`);
     }
 
-    // Parse request body for type parameter
-    let dataType = "overview";
+    // Parse request body
+    let body: Record<string, unknown> = {};
     try {
-      const body = await req.json();
-      dataType = body?.type || "overview";
+      body = await req.json();
     } catch {
-      // If no body or invalid JSON, use default
+      // If no body or invalid JSON, use empty object
     }
 
+    const dataType = (body?.type as string) || "overview";
     let responseData: Record<string, unknown> = {};
 
     switch (dataType) {
       case "overview": {
-        // Get total users count
-        const { count: usersCount } = await adminClient
-          .from("user_roles")
-          .select("*", { count: "exact", head: true });
-
         // Get distinct users from auth (count users with vehicles)
         const { data: vehicleUsers } = await adminClient
           .from("vehicles")
@@ -134,12 +129,18 @@ Deno.serve(async (req) => {
           });
         });
 
+        // Get suspended users count
+        const { count: suspendedCount } = await adminClient
+          .from("user_suspensions")
+          .select("*", { count: "exact", head: true });
+
         responseData = {
           totalUsers: uniqueUserIds.size,
           totalVehicles: vehiclesCount || 0,
           verifiedVehicles: verifiedCount || 0,
           totalDocuments: documentsCount || 0,
           expiringThisMonth: expiringCount,
+          suspendedUsers: suspendedCount || 0,
         };
         break;
       }
@@ -153,6 +154,13 @@ Deno.serve(async (req) => {
         const { data: documents } = await adminClient
           .from("documents")
           .select("user_id");
+
+        // Get suspended users
+        const { data: suspensions } = await adminClient
+          .from("user_suspensions")
+          .select("user_id, suspended_at, reason");
+
+        const suspensionMap = new Map(suspensions?.map(s => [s.user_id, s]) || []);
 
         // Group by user_id
         const userMap = new Map<string, { vehicleCount: number; documentCount: number; firstVehicleDate: string | null }>();
@@ -180,16 +188,23 @@ Deno.serve(async (req) => {
           vehicleCount: number;
           documentCount: number;
           joinDate: string | null;
+          isSuspended: boolean;
+          suspendedAt: string | null;
+          suspensionReason: string | null;
         }> = [];
 
-        for (const [userId, stats] of userMap) {
-          const { data: userData } = await adminClient.auth.admin.getUserById(userId);
+        for (const [uId, stats] of userMap) {
+          const { data: userData } = await adminClient.auth.admin.getUserById(uId);
+          const suspension = suspensionMap.get(uId);
           users.push({
-            userId,
+            userId: uId,
             email: userData?.user?.email || "Unknown",
             vehicleCount: stats.vehicleCount,
             documentCount: stats.documentCount,
             joinDate: stats.firstVehicleDate,
+            isSuspended: !!suspension,
+            suspendedAt: suspension?.suspended_at || null,
+            suspensionReason: suspension?.reason || null,
           });
         }
 
@@ -253,6 +268,156 @@ Deno.serve(async (req) => {
         );
 
         responseData = { vehicles: enrichedVehicles };
+        break;
+      }
+
+      case "transfers": {
+        // Get all transfers
+        const { data: transfers } = await adminClient
+          .from("vehicle_transfers")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        const enrichedTransfers = await Promise.all(
+          (transfers || []).map(async (t) => {
+            const { data: senderData } = await adminClient.auth.admin.getUserById(t.sender_id);
+            const { data: vehicleData } = await adminClient
+              .from("vehicles")
+              .select("registration_number, maker_model")
+              .eq("id", t.vehicle_id)
+              .single();
+
+            return {
+              ...t,
+              senderEmail: senderData?.user?.email || "Unknown",
+              registrationNumber: vehicleData?.registration_number || "Deleted",
+              makerModel: vehicleData?.maker_model || null,
+            };
+          })
+        );
+
+        responseData = { transfers: enrichedTransfers };
+        break;
+      }
+
+      // Admin actions
+      case "suspend_user": {
+        const targetUserId = body?.userId as string;
+        const reason = (body?.reason as string) || null;
+
+        if (!targetUserId) {
+          return new Response(
+            JSON.stringify({ error: "userId is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Check if already suspended
+        const { data: existing } = await adminClient
+          .from("user_suspensions")
+          .select("id")
+          .eq("user_id", targetUserId)
+          .single();
+
+        if (existing) {
+          return new Response(
+            JSON.stringify({ error: "User is already suspended" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const { error: suspendError } = await adminClient
+          .from("user_suspensions")
+          .insert({
+            user_id: targetUserId,
+            suspended_by: userId,
+            reason,
+          });
+
+        if (suspendError) {
+          console.error("Suspend error:", suspendError);
+          return new Response(
+            JSON.stringify({ error: "Failed to suspend user" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        responseData = { success: true, message: "User suspended" };
+        break;
+      }
+
+      case "unsuspend_user": {
+        const targetUserId = body?.userId as string;
+
+        if (!targetUserId) {
+          return new Response(
+            JSON.stringify({ error: "userId is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const { error: unsuspendError } = await adminClient
+          .from("user_suspensions")
+          .delete()
+          .eq("user_id", targetUserId);
+
+        if (unsuspendError) {
+          console.error("Unsuspend error:", unsuspendError);
+          return new Response(
+            JSON.stringify({ error: "Failed to unsuspend user" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        responseData = { success: true, message: "User unsuspended" };
+        break;
+      }
+
+      case "set_vehicle_verification": {
+        const vehicleId = body?.vehicleId as string;
+        const isVerified = body?.isVerified as boolean;
+
+        if (!vehicleId || typeof isVerified !== "boolean") {
+          return new Response(
+            JSON.stringify({ error: "vehicleId and isVerified are required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const { error: updateError } = await adminClient
+          .from("vehicles")
+          .update({
+            is_verified: isVerified,
+            verified_at: isVerified ? new Date().toISOString() : null,
+          })
+          .eq("id", vehicleId);
+
+        if (updateError) {
+          console.error("Verification update error:", updateError);
+          return new Response(
+            JSON.stringify({ error: "Failed to update verification status" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Log to vehicle history
+        const { data: vehicle } = await adminClient
+          .from("vehicles")
+          .select("user_id, registration_number")
+          .eq("id", vehicleId)
+          .single();
+
+        if (vehicle) {
+          await adminClient.from("vehicle_history").insert({
+            vehicle_id: vehicleId,
+            user_id: vehicle.user_id,
+            event_type: isVerified ? "ADMIN_VERIFIED" : "ADMIN_UNVERIFIED",
+            event_description: `Vehicle ${isVerified ? "verified" : "unverified"} by admin`,
+            metadata: { admin_email: userEmail },
+          });
+        }
+
+        responseData = { success: true, message: `Vehicle ${isVerified ? "verified" : "unverified"}` };
         break;
       }
 
