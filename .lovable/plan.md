@@ -1,127 +1,199 @@
 
-# Smart Alerts: AI-Powered Expiry Notifications
+# Editable Fields + AI Document Scanner
 
 ## Overview
 
-Implement an intelligent notification system that sends personalized email reminders before vehicle documents expire. The AI will analyze vehicle data and generate contextual renewal tips, cost estimates, and urgency-based messaging.
+This plan implements two complementary features:
+1. **Editable Vehicle Fields** - Allow users to manually fill in missing data that the API didn't provide
+2. **AI Document Scanner** - Use Gemini's vision capabilities to automatically extract data from uploaded documents and offer to populate empty fields
 
 ## How It Works
 
-1. **Daily Cron Job** scans all vehicles for documents expiring in the next 30 days
-2. **AI Analysis** generates personalized content for each expiring document:
-   - Estimated renewal cost based on vehicle type and document
-   - Location-specific tips (e.g., nearest RTO, recommended workshops)
-   - Urgency messaging based on days remaining
-   - Consequences of not renewing
-3. **Email Delivery** sends beautifully formatted alerts via Resend
+### Feature 1: Editable Fields
 
-## Features
+Users can click an "Edit" button on the Vehicle Details page to enter edit mode. In this mode, empty fields become editable input fields. Changes are saved to the database and logged in vehicle history.
 
-- Personalized AI-generated renewal advice per document type
-- Cost estimates based on vehicle category and region
-- Smart batching: one consolidated email per user with all expiring documents
-- Configurable alert windows (30 days, 7 days, expired)
-- Activity logging in vehicle history
+**Editable fields include:**
+- Vehicle Identity: Manufacturer, Model, Vehicle Class, Category, Body Type, Color, Registration Date
+- Technical Specs: Engine Number, Chassis Number, Cubic Capacity, Seating Capacity, Emission Norms, Wheelbase, Gross/Unladen Weight
+- Ownership: Owner Name, Owner Count, Finance Status, Financer, NOC Details
+- Document Dates: Insurance Expiry (+ Company), PUCC Expiry, Fitness Expiry, Road Tax Expiry
+
+### Feature 2: AI Document Scanner
+
+When a user uploads a document (insurance policy, RC, PUCC certificate), the system:
+1. Sends the document image/PDF to Gemini Pro Vision via Lovable AI
+2. Extracts relevant fields based on document type
+3. Shows a preview modal with extracted data alongside current values
+4. Allows users to accept/reject each extracted field
+
+**Document type to field mapping:**
+- **Insurance Policy** - insurance_company, insurance_expiry, owner_name, registration_number
+- **RC (Registration Certificate)** - owner_name, chassis_number, engine_number, registration_date, manufacturer, maker_model, fuel_type, color, seating_capacity
+- **PUCC Certificate** - pucc_valid_upto
+- **Fitness Certificate** - fitness_valid_upto
+
+## User Experience Flow
+
+### Editing Fields
+1. User visits Vehicle Details page
+2. Clicks "Edit Details" button in header
+3. Empty fields become editable inputs; filled fields show current value
+4. User fills in missing data
+5. Clicks "Save Changes" to persist
+6. Action logged to vehicle history
+
+### AI Document Scan
+1. User selects document type and uploads a file
+2. Loading spinner shows "Analyzing document with AI..."
+3. Modal appears showing:
+   - Left side: Extracted values from document
+   - Right side: Current database values
+   - Checkboxes to select which fields to update
+4. User reviews and clicks "Apply Selected" or "Cancel"
+5. Selected fields are updated and changes logged
 
 ## Implementation Steps
 
-### 1. Database Changes
-Create a table to track sent notifications (prevent duplicate emails):
-- `expiry_notifications` table with `vehicle_id`, `document_type`, `notification_type` (30-day, 7-day, expired), `sent_at`
+### Phase 1: Database & Backend
 
-### 2. Edge Function: `check-expiry-alerts`
-A scheduled function that:
-- Queries all vehicles with documents expiring within alert windows
-- Groups by user to consolidate notifications
-- Calls Lovable AI to generate personalized content for each document
-- Sends consolidated email per user via Resend
-- Logs notifications sent to prevent duplicates
+**1.1 Edge Function: `analyze-document`**
+- Accepts: document file (base64), document type, vehicle context
+- Uses Lovable AI with google/gemini-2.5-pro (vision-capable model)
+- Returns: extracted fields as structured JSON
 
-### 3. AI Prompt Engineering
-The AI will receive:
-- Vehicle details (type, age, fuel, region from registration)
-- Document type and days until expiry
-- Historical data (previous renewals from vehicle history)
+### Phase 2: Frontend Components
 
-And generate:
-- Estimated cost range (based on vehicle type)
-- Renewal steps specific to the document
-- Pro tips (best time to renew, common mistakes to avoid)
-- Urgency level and consequences
+**2.1 Editable Detail Item Component**
+Create `EditableDetailItem.tsx`:
+- Props: label, value, fieldName, isEditing, onChange, inputType
+- Shows value when not editing
+- Shows input field when editing
 
-### 4. Email Template
-Consolidated email showing:
-- Summary header with vehicle count and urgency
-- Per-vehicle sections with expiring documents
-- AI-generated tips and cost estimates for each
-- Call-to-action to open the app
+**2.2 Document Analysis Modal**
+Create `DocumentAnalysisModal.tsx`:
+- Shows side-by-side comparison of extracted vs current values
+- Checkboxes for each field
+- "Apply Selected" button
 
-### 5. Cron Setup
-Daily scheduled job (pg_cron) to trigger the check-expiry-alerts function
+**2.3 Update VehicleDetails.tsx**
+- Add edit mode state
+- Replace DetailItem with EditableDetailItem in relevant sections
+- Add "Edit Details" button
+- Add save functionality
+- Integrate AI analysis after document upload
 
 ## Technical Details
 
-### Database Schema
+### Edge Function: analyze-document
+
 ```text
-expiry_notifications
-├── id (uuid, primary key)
-├── vehicle_id (uuid, foreign key → vehicles)
-├── user_id (uuid, not null)
-├── document_type (text: insurance, pucc, fitness, road_tax)
-├── notification_type (text: 30_day, 7_day, expired)
-├── ai_content (jsonb: stores generated tips/costs)
-├── sent_at (timestamptz)
-└── created_at (timestamptz)
+Input:
+{
+  documentBase64: string,
+  documentType: "insurance" | "rc" | "pucc" | "fitness" | "other",
+  vehicleContext: {
+    registration_number: string,
+    current_values: { ... }
+  }
+}
+
+Output:
+{
+  success: true,
+  extractedFields: {
+    owner_name?: string,
+    insurance_expiry?: string,
+    insurance_company?: string,
+    // ... other fields based on doc type
+  },
+  confidence: "high" | "medium" | "low",
+  rawText?: string // Optional debug info
+}
 ```
 
-### Edge Function Flow
+### AI Prompt Structure
+
+The AI will receive:
+- Document image (as base64)
+- Document type context
+- List of fields to extract based on document type
+- Current vehicle registration for verification
+
+And will use tool calling to return structured data:
 ```text
-check-expiry-alerts
-    │
-    ├── Query vehicles with expiring documents
-    │
-    ├── Group by user_id
-    │
-    ├── For each user:
-    │   ├── Filter out already-notified documents
-    │   ├── Call Lovable AI for each document type
-    │   ├── Compile consolidated email content
-    │   └── Send email via Resend
-    │
-    └── Log sent notifications
+{
+  extracted_fields: {
+    field_name: {
+      value: string,
+      confidence: number,
+      source_location: string // "top-right", "table row 3", etc.
+    }
+  }
+}
 ```
 
-### AI Integration
-Uses Lovable AI (google/gemini-3-flash-preview) with structured output:
-- No API key required (uses pre-configured LOVABLE_API_KEY)
-- Structured JSON response for consistent parsing
-- Cost estimates based on Indian vehicle categories
+### Field Extraction by Document Type
 
-### Example AI Output
+| Document Type | Fields to Extract |
+|---------------|------------------|
+| Insurance | insurance_company, insurance_expiry, owner_name, policy_number (for reference) |
+| RC | owner_name, chassis_number, engine_number, registration_date, manufacturer, maker_model, fuel_type, color, seating_capacity, cubic_capacity, vehicle_class, body_type |
+| PUCC | pucc_valid_upto, emission_norms |
+| Fitness | fitness_valid_upto |
+
+### Component Structure
+
 ```text
-Document: Insurance (expires in 7 days)
-Vehicle: Maruti Swift (Petrol, 2018)
-
-Estimated Cost: ₹8,000 - ₹12,000
-Tip: Compare quotes online before visiting the insurer. 
-Many companies offer 10-15% discounts for early renewal.
-Urgency: High - Driving without insurance is illegal 
-and carries a ₹2,000 fine.
+VehicleDetails.tsx
+├── isEditing state
+├── pendingChanges state
+├── analysisResult state
+│
+├── Header
+│   ├── "Edit Details" button (toggles edit mode)
+│   └── "Save Changes" button (when editing)
+│
+├── SectionCard (Vehicle Identity)
+│   └── EditableDetailItem (for each field)
+│
+├── SectionCard (Technical Specs)
+│   └── EditableDetailItem (for each field)
+│
+├── Document Repository
+│   ├── Upload triggers AI analysis
+│   └── DocumentAnalysisModal (shows when analysis complete)
 ```
 
 ## Files to Create/Modify
 
-| File | Action |
-|------|--------|
-| `supabase/migrations/[timestamp]_expiry_notifications.sql` | Create table |
-| `supabase/functions/check-expiry-alerts/index.ts` | Main cron function |
-| `supabase/config.toml` | Register new function |
-| Dashboard component (optional) | Show alert preferences UI |
+| File | Action | Description |
+|------|--------|-------------|
+| `supabase/functions/analyze-document/index.ts` | Create | Edge function for AI document analysis |
+| `supabase/config.toml` | Edit | Register new function |
+| `src/components/vehicle/EditableDetailItem.tsx` | Create | Editable field component |
+| `src/components/vehicle/DocumentAnalysisModal.tsx` | Create | AI extraction review modal |
+| `src/pages/VehicleDetails.tsx` | Edit | Add edit mode and AI integration |
 
 ## Cost and Performance
 
-- Lovable AI calls: ~1-4 per user per run (batched by document type)
-- Email sends: 1 per user with expiring documents
-- Cron runs: Once daily
-- Estimated free tier usage: Well within limits for typical usage
+- **Gemini Vision calls**: ~1 per document upload (using google/gemini-2.5-pro for best vision accuracy)
+- **Payload size**: Documents are sent as base64 (max 5MB per file)
+- **Processing time**: 5-15 seconds per document depending on complexity
+- **Lovable AI costs**: Within free tier for typical usage
 
+## Edge Cases Handled
+
+1. **Low confidence extraction**: Show warning icon, let user verify
+2. **Conflicting data**: Show both extracted and current values clearly
+3. **Document in different language**: Gemini supports multiple languages including Hindi
+4. **Unreadable document**: Show error message, suggest re-uploading
+5. **PDF documents**: Convert first page to image for analysis
+6. **Wrong document type**: AI can detect and suggest correct type
+
+## Security Considerations
+
+- Documents are processed in-memory, not stored permanently
+- Base64 data is transmitted securely over HTTPS
+- User must be authenticated to upload/analyze documents
+- RLS policies ensure users can only update their own vehicles
