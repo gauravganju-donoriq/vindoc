@@ -35,27 +35,20 @@ serve(async (req) => {
     }
 
     console.log(`Fetching vehicle details for: ${registrationNumber}`);
-    console.log(`API Key length: ${rapidApiKey.length}`);
 
-    // Exact payload format matching the Python implementation
+    // Using new RTO Vehicle Details API
     const payload = JSON.stringify({ vehicle_number: registrationNumber });
     console.log('Payload:', payload);
 
-    // Create headers exactly as RapidAPI specifies
-    // Add User-Agent and Accept headers that may be required
-    const headers = new Headers();
-    headers.set('x-rapidapi-key', rapidApiKey);
-    headers.set('x-rapidapi-host', 'vehicle-rc-information-v2.p.rapidapi.com');
-    headers.set('Content-Type', 'application/json');
-    headers.set('Accept', 'application/json');
-    headers.set('User-Agent', 'Mozilla/5.0');
+    console.log('Making request to rto-vehicle-details API...');
 
-    console.log('Making request to RapidAPI with enhanced headers...');
-
-    // Try without trailing slash and with explicit path
-    const response = await fetch('https://vehicle-rc-information-v2.p.rapidapi.com', {
+    const response = await fetch('https://rto-vehicle-details.p.rapidapi.com/api3', {
       method: 'POST',
-      headers: headers,
+      headers: {
+        'x-rapidapi-key': rapidApiKey,
+        'x-rapidapi-host': 'rto-vehicle-details.p.rapidapi.com',
+        'Content-Type': 'application/json'
+      },
       body: payload,
     });
 
