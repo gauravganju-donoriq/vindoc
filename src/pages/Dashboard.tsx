@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import { Car, Plus, LogOut, AlertTriangle, CheckCircle, Clock, Trash2, ShieldCheck, ShieldX } from "lucide-react";
+import { Car, Plus, LogOut, AlertTriangle, CheckCircle, Clock, Trash2, ShieldCheck, ShieldX, Shield } from "lucide-react";
+import { useIsAdminUser } from "@/hooks/useAdminCheck";
 import { format, differenceInDays, isPast } from "date-fns";
 import {
   AlertDialog,
@@ -55,6 +56,7 @@ const Dashboard = () => {
   const [userEmail, setUserEmail] = useState<string | undefined>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { isAdmin } = useIsAdminUser();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -165,10 +167,20 @@ const Dashboard = () => {
             <Car className="h-6 w-6 text-primary" />
             <h1 className="text-xl font-semibold">Vehicle Manager</h1>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/admin">
+                  <Shield className="h-4 w-4 mr-2" />
+                  Admin
+                </Link>
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 
