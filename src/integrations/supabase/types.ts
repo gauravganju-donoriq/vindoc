@@ -55,6 +55,47 @@ export type Database = {
           },
         ]
       }
+      expiry_notifications: {
+        Row: {
+          ai_content: Json | null
+          created_at: string
+          document_type: string
+          id: string
+          notification_type: string
+          sent_at: string
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          ai_content?: Json | null
+          created_at?: string
+          document_type: string
+          id?: string
+          notification_type: string
+          sent_at?: string
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          ai_content?: Json | null
+          created_at?: string
+          document_type?: string
+          id?: string
+          notification_type?: string
+          sent_at?: string
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expiry_notifications_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_history: {
         Row: {
           created_at: string
