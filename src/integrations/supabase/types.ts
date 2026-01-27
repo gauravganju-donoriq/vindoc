@@ -199,6 +199,7 @@ export type Database = {
           insurance_company: string | null
           insurance_expiry: string | null
           is_financed: boolean | null
+          is_verified: boolean | null
           maker_model: string | null
           manufacturer: string | null
           noc_details: string | null
@@ -216,6 +217,8 @@ export type Database = {
           user_id: string
           vehicle_category: string | null
           vehicle_class: string | null
+          verification_photo_path: string | null
+          verified_at: string | null
           wheelbase: string | null
         }
         Insert: {
@@ -235,6 +238,7 @@ export type Database = {
           insurance_company?: string | null
           insurance_expiry?: string | null
           is_financed?: boolean | null
+          is_verified?: boolean | null
           maker_model?: string | null
           manufacturer?: string | null
           noc_details?: string | null
@@ -252,6 +256,8 @@ export type Database = {
           user_id: string
           vehicle_category?: string | null
           vehicle_class?: string | null
+          verification_photo_path?: string | null
+          verified_at?: string | null
           wheelbase?: string | null
         }
         Update: {
@@ -271,6 +277,7 @@ export type Database = {
           insurance_company?: string | null
           insurance_expiry?: string | null
           is_financed?: boolean | null
+          is_verified?: boolean | null
           maker_model?: string | null
           manufacturer?: string | null
           noc_details?: string | null
@@ -288,6 +295,8 @@ export type Database = {
           user_id?: string
           vehicle_category?: string | null
           vehicle_class?: string | null
+          verification_photo_path?: string | null
+          verified_at?: string | null
           wheelbase?: string | null
         }
         Relationships: []
