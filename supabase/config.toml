@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.send-transfer-notification]
 verify_jwt = false
+
+[functions.check-expiry-alerts]
+verify_jwt = false
