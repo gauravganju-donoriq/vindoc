@@ -23,15 +23,28 @@ export function AdminActivity() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const fetchWithRetry = async (maxRetries = 2) => {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const { data, error: fnError } = await supabase.functions.invoke(
+            "admin-data",
+            { body: { type: "activity" } }
+          );
+
+          if (fnError) throw fnError;
+          return data?.activity || [];
+        } catch (err) {
+          if (attempt === maxRetries) throw err;
+          console.log(`Activity fetch attempt ${attempt + 1} failed, retrying...`);
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+    };
+
     const fetchActivity = async () => {
       try {
-        const { data, error: fnError } = await supabase.functions.invoke(
-          "admin-data",
-          { body: { type: "activity" } }
-        );
-
-        if (fnError) throw fnError;
-        setActivity(data?.activity || []);
+        const activityData = await fetchWithRetry();
+        setActivity(activityData);
       } catch (err: any) {
         console.error("Failed to fetch activity:", err);
         setError(err.message || "Failed to load activity");

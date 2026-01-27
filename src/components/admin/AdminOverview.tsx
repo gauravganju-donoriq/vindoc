@@ -17,19 +17,30 @@ export function AdminOverview() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const fetchWithRetry = async (maxRetries = 2) => {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) return null;
+
+          const { data: overviewData, error: fnError } = await supabase.functions.invoke(
+            "admin-data",
+            { body: { type: "overview" } }
+          );
+
+          if (fnError) throw fnError;
+          return overviewData;
+        } catch (err) {
+          if (attempt === maxRetries) throw err;
+          console.log(`Attempt ${attempt + 1} failed, retrying...`);
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+    };
+
     const fetchOverview = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-
-        const { data: overviewData, error: fnError } = await supabase.functions.invoke(
-          "admin-data",
-          { 
-            body: { type: "overview" },
-          }
-        );
-
-        if (fnError) throw fnError;
+        const overviewData = await fetchWithRetry();
         setData(overviewData);
       } catch (err: any) {
         console.error("Failed to fetch overview:", err);
