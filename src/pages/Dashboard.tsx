@@ -21,6 +21,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import PendingTransfers from "@/components/transfers/PendingTransfers";
+import { PendingOwnershipClaims } from "@/components/transfers/PendingOwnershipClaims";
 
 interface Vehicle {
   id: string;
@@ -185,6 +186,9 @@ const Dashboard = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        {/* Pending Ownership Claims Section */}
+        <PendingOwnershipClaims />
+
         {/* Pending Transfers Section */}
         <PendingTransfers userEmail={userEmail} onTransferAccepted={fetchVehicles} />
 
