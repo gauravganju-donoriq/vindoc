@@ -35,21 +35,27 @@ serve(async (req) => {
     }
 
     console.log(`Fetching vehicle details for: ${registrationNumber}`);
-    console.log(`API Key configured, length: ${rapidApiKey.length}`);
+    console.log(`API Key length: ${rapidApiKey.length}`);
 
-    // Match exactly the Python working implementation
-    const payload = `{"vehicle_number":"${registrationNumber}"}`;
-    
-    console.log('Making request to RapidAPI...');
+    // Exact payload format matching the Python implementation
+    const payload = JSON.stringify({ vehicle_number: registrationNumber });
     console.log('Payload:', payload);
-    
-    const response = await fetch('https://vehicle-rc-information-v2.p.rapidapi.com/', {
+
+    // Create headers exactly as RapidAPI specifies
+    // Add User-Agent and Accept headers that may be required
+    const headers = new Headers();
+    headers.set('x-rapidapi-key', rapidApiKey);
+    headers.set('x-rapidapi-host', 'vehicle-rc-information-v2.p.rapidapi.com');
+    headers.set('Content-Type', 'application/json');
+    headers.set('Accept', 'application/json');
+    headers.set('User-Agent', 'Mozilla/5.0');
+
+    console.log('Making request to RapidAPI with enhanced headers...');
+
+    // Try without trailing slash and with explicit path
+    const response = await fetch('https://vehicle-rc-information-v2.p.rapidapi.com', {
       method: 'POST',
-      headers: new Headers({
-        'x-rapidapi-key': rapidApiKey,
-        'x-rapidapi-host': 'vehicle-rc-information-v2.p.rapidapi.com',
-        'Content-Type': 'application/json'
-      }),
+      headers: headers,
       body: payload,
     });
 
@@ -58,7 +64,7 @@ serve(async (req) => {
     // Get raw response
     const rawText = await response.text();
     console.log("Raw response length:", rawText.length);
-    console.log("Raw response preview:", rawText.substring(0, 300));
+    console.log("Raw response preview:", rawText.substring(0, 500));
 
     if (!response.ok) {
       console.error("API returned error status:", response.status);
