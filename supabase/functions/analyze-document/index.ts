@@ -5,8 +5,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform",
 };
 
-// Field mappings by document type
+// Universal field list - all possible vehicle fields that can be extracted
+const allFields = [
+  "owner_name", "insurance_company", "insurance_expiry", "chassis_number", 
+  "engine_number", "registration_date", "manufacturer", "maker_model", 
+  "fuel_type", "color", "seating_capacity", "cubic_capacity", "vehicle_class", 
+  "body_type", "vehicle_category", "gross_vehicle_weight", "unladen_weight", 
+  "pucc_valid_upto", "fitness_valid_upto", "road_tax_valid_upto", "emission_norms"
+];
+
+// Field mappings by document type (for when user explicitly selects a type)
 const fieldsByDocumentType: Record<string, string[]> = {
+  auto: allFields, // Universal extraction
   insurance: ["insurance_company", "insurance_expiry", "owner_name"],
   rc: [
     "owner_name", "chassis_number", "engine_number", "registration_date",
@@ -16,10 +26,7 @@ const fieldsByDocumentType: Record<string, string[]> = {
   ],
   pucc: ["pucc_valid_upto", "emission_norms"],
   fitness: ["fitness_valid_upto"],
-  other: [
-    "owner_name", "insurance_company", "insurance_expiry", "pucc_valid_upto",
-    "fitness_valid_upto", "road_tax_valid_upto", "chassis_number", "engine_number"
-  ]
+  other: allFields // Treat "other" as universal extraction too
 };
 
 serve(async (req) => {
@@ -40,7 +47,7 @@ serve(async (req) => {
 
     // Validate base64 and log size for debugging
     const base64Size = Math.round((documentBase64.length * 3) / 4 / 1024);
-    console.log(`Processing image: ~${base64Size}KB, type: ${mimeType || "unknown"}`);
+    console.log(`Processing image: ~${base64Size}KB, type: ${mimeType || "unknown"}, docType: ${documentType}`);
 
     if (base64Size > 4096) {
       return new Response(
@@ -58,10 +65,33 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const fieldsToExtract = fieldsByDocumentType[documentType] || fieldsByDocumentType.other;
+    // Use universal extraction for "auto" mode or unrecognized types
+    const isAutoMode = documentType === "auto" || !fieldsByDocumentType[documentType];
+    const fieldsToExtract = isAutoMode ? allFields : fieldsByDocumentType[documentType];
 
     // Build the prompt for document analysis
-    const systemPrompt = `You are a specialized document analyzer for Indian vehicle documents. 
+    const systemPrompt = isAutoMode 
+      ? `You are a specialized document analyzer for Indian vehicle documents. 
+
+IMPORTANT INSTRUCTIONS:
+1. First, IDENTIFY what type of document this is:
+   - Insurance Policy (vehicle insurance document)
+   - Registration Certificate / RC (vehicle registration document)
+   - PUCC Certificate (Pollution Under Control Certificate)
+   - Fitness Certificate (vehicle fitness/roadworthiness certificate)
+   - Other (any other vehicle-related document)
+
+2. Then, extract ALL visible fields from the document that match vehicle data.
+
+EXTRACTION RULES:
+- Extract EVERY field you can clearly read from the document
+- For dates, use YYYY-MM-DD format
+- For text fields, extract exactly as written (preserve case)
+- If a field is not visible or unclear, do not include it
+- Be accurate - this data will update official vehicle records
+
+Vehicle Registration Number for reference: ${vehicleContext?.registration_number || "Unknown"}`
+      : `You are a specialized document analyzer for Indian vehicle documents. 
 Your task is to extract specific fields from the uploaded document image.
 
 IMPORTANT INSTRUCTIONS:
@@ -74,10 +104,17 @@ IMPORTANT INSTRUCTIONS:
 
 Vehicle Registration Number for reference: ${vehicleContext?.registration_number || "Unknown"}`;
 
-    const userPrompt = `Analyze this ${documentType === "rc" ? "Registration Certificate (RC)" : 
+    const documentTypeLabel = isAutoMode ? "vehicle document" :
+      documentType === "rc" ? "Registration Certificate (RC)" : 
       documentType === "pucc" ? "Pollution Under Control Certificate (PUCC)" :
       documentType === "fitness" ? "Fitness Certificate" :
-      documentType === "insurance" ? "Insurance Policy" : "vehicle document"} and extract the relevant information.
+      documentType === "insurance" ? "Insurance Policy" : "vehicle document";
+
+    const userPrompt = isAutoMode 
+      ? `Analyze this document image. First identify what type of vehicle document it is, then extract ALL visible vehicle-related information.
+
+Look for these fields if they appear: ${fieldsToExtract.join(", ")}`
+      : `Analyze this ${documentTypeLabel} and extract the relevant information.
 
 Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
 
@@ -87,7 +124,7 @@ Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
       mediaType = "image/jpeg";
     }
 
-    console.log(`Sending request to AI gateway with model google/gemini-2.5-pro`);
+    console.log(`Sending request to AI gateway with model google/gemini-2.5-pro (auto mode: ${isAutoMode})`);
 
     // Use Gemini Pro which has strongest document/image understanding
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -156,10 +193,11 @@ Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
                   },
                   document_type_detected: {
                     type: "string",
-                    description: "The type of document detected (insurance/rc/pucc/fitness/other)"
+                    enum: ["insurance", "rc", "pucc", "fitness", "other"],
+                    description: "The type of document detected"
                   }
                 },
-                required: ["extracted_fields", "confidence"]
+                required: ["extracted_fields", "confidence", "document_type_detected"]
               }
             }
           }
@@ -225,10 +263,14 @@ Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
     }
 
     const extractedData = JSON.parse(toolCall.function.arguments);
+    const detectedType = extractedData.document_type_detected || documentType;
 
-    // Filter to only include fields relevant to the document type
+    // For auto mode, return all extracted fields
+    // For specific document types, filter to relevant fields only
     const filteredFields: Record<string, any> = {};
-    for (const field of fieldsToExtract) {
+    const relevantFields = isAutoMode ? allFields : fieldsToExtract;
+    
+    for (const field of relevantFields) {
       if (extractedData.extracted_fields[field] !== undefined && 
           extractedData.extracted_fields[field] !== null &&
           extractedData.extracted_fields[field] !== "") {
@@ -236,14 +278,14 @@ Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
       }
     }
 
-    console.log(`Extracted ${Object.keys(filteredFields).length} fields with ${extractedData.confidence} confidence`);
+    console.log(`Extracted ${Object.keys(filteredFields).length} fields with ${extractedData.confidence} confidence, detected type: ${detectedType}`);
 
     return new Response(
       JSON.stringify({
         success: true,
         extractedFields: filteredFields,
         confidence: extractedData.confidence || "medium",
-        documentTypeDetected: extractedData.document_type_detected || documentType
+        documentTypeDetected: detectedType
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
