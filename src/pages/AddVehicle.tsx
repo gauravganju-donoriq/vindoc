@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Search, Loader2, Car } from "lucide-react";
+import { ArrowLeft, Search, Loader2, Car, AlertTriangle, Send } from "lucide-react";
 import { format } from "date-fns";
 import { logVehicleEvent } from "@/lib/vehicleHistory";
+import { RequestTransferDialog } from "@/components/vehicle/RequestTransferDialog";
 
 interface FetchedVehicleData {
   owner_name?: string;
@@ -42,6 +43,15 @@ const AddVehicle = () => {
   const [isFetching, setIsFetching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [manualMode, setManualMode] = useState(false);
+  
+  // Duplicate vehicle state
+  const [duplicateVehicleInfo, setDuplicateVehicleInfo] = useState<{
+    vehicleId: string;
+    currentOwnerId: string;
+    registrationNumber: string;
+    makerModel?: string;
+  } | null>(null);
+  const [showClaimDialog, setShowClaimDialog] = useState(false);
   
   // Manual form fields
   const [ownerName, setOwnerName] = useState("");
@@ -157,11 +167,37 @@ const AddVehicle = () => {
 
       if (error) {
         if (error.code === "23505") {
-          toast({
-            title: "Vehicle already registered",
-            description: "This vehicle is already registered in the system by another user.",
-            variant: "destructive",
-          });
+          // Vehicle already exists - fetch owner info for claim
+          try {
+            const { data: vehicleData } = await supabase.functions.invoke("admin-data", {
+              body: { 
+                type: "get_vehicle_for_claim", 
+                registrationNumber: formatRegNumber(registrationNumber) 
+              },
+            });
+
+            if (vehicleData?.found && vehicleData.ownerId !== user.id) {
+              setDuplicateVehicleInfo({
+                vehicleId: vehicleData.vehicleId,
+                currentOwnerId: vehicleData.ownerId,
+                registrationNumber: formatRegNumber(registrationNumber),
+                makerModel: vehicleData.makerModel,
+              });
+            } else {
+              toast({
+                title: "Vehicle already registered",
+                description: "This vehicle is already in your account.",
+                variant: "destructive",
+              });
+            }
+          } catch (fetchError) {
+            console.error("Failed to fetch vehicle info:", fetchError);
+            toast({
+              title: "Vehicle already registered",
+              description: "This vehicle is already registered in the system.",
+              variant: "destructive",
+            });
+          }
           return;
         }
         throw error;
@@ -431,24 +467,79 @@ const AddVehicle = () => {
               </div>
             )}
 
-            {/* Save Button */}
-            <Button 
-              onClick={handleSave} 
-              className="w-full" 
-              disabled={isSaving || !registrationNumber}
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Vehicle"
-              )}
-            </Button>
+            {/* Duplicate Vehicle Alert */}
+            {duplicateVehicleInfo && (
+              <Card className="border-amber-500 bg-amber-50 dark:bg-amber-950/20">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    <CardTitle className="text-amber-800 dark:text-amber-400 text-base">
+                      Vehicle Already Registered
+                    </CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    The vehicle <strong>{duplicateVehicleInfo.registrationNumber}</strong>
+                    {duplicateVehicleInfo.makerModel && ` (${duplicateVehicleInfo.makerModel})`} is 
+                    registered to another user.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    If you recently purchased this vehicle, you can request the current owner to 
+                    transfer ownership to you. They will receive an email notification.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={() => setShowClaimDialog(true)}
+                      className="flex-1"
+                    >
+                      <Send className="h-4 w-4 mr-2" />
+                      Request Transfer
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setDuplicateVehicleInfo(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Save Button - hide when duplicate is shown */}
+            {!duplicateVehicleInfo && (
+              <Button 
+                onClick={handleSave} 
+                className="w-full" 
+                disabled={isSaving || !registrationNumber}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Vehicle"
+                )}
+              </Button>
+            )}
           </CardContent>
         </Card>
       </main>
+
+      {/* Request Transfer Dialog */}
+      {duplicateVehicleInfo && (
+        <RequestTransferDialog
+          open={showClaimDialog}
+          onOpenChange={setShowClaimDialog}
+          vehicleInfo={duplicateVehicleInfo}
+          onSuccess={() => {
+            setDuplicateVehicleInfo(null);
+            navigate("/dashboard");
+          }}
+        />
+      )}
     </div>
   );
 };

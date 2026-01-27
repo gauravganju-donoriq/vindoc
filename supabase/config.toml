@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.admin-data]
 verify_jwt = false
+
+[functions.send-ownership-claim-notification]
+verify_jwt = false
