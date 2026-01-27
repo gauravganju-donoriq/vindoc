@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { checkUserSuspension } from "@/hooks/useSuspensionCheck";
 import { Car, Mail, Lock, Eye, EyeOff } from "lucide-react";
 
 const Auth = () => {
@@ -18,20 +19,43 @@ const Auth = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const checkSessionAndSuspension = async (userId: string) => {
+      const { isSuspended } = await checkUserSuspension(userId);
+      if (isSuspended) {
+        await supabase.auth.signOut();
+        toast({
+          title: "Account Suspended",
+          description: "Your account has been suspended. Please contact support.",
+          variant: "destructive",
+        });
+        return false;
+      }
+      return true;
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
-        navigate("/dashboard");
+        // Use setTimeout to avoid Supabase deadlock
+        setTimeout(async () => {
+          const canProceed = await checkSessionAndSuspension(session.user.id);
+          if (canProceed) {
+            navigate("/dashboard");
+          }
+        }, 0);
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
-        navigate("/dashboard");
+        const canProceed = await checkSessionAndSuspension(session.user.id);
+        if (canProceed) {
+          navigate("/dashboard");
+        }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,11 +63,26 @@ const Auth = () => {
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
+
+        // Check if user is suspended
+        if (data.user) {
+          const { isSuspended } = await checkUserSuspension(data.user.id);
+          if (isSuspended) {
+            await supabase.auth.signOut();
+            toast({
+              title: "Account Suspended",
+              description: "Your account has been suspended. Please contact support for assistance.",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+
         toast({
           title: "Welcome back!",
           description: "You have successfully logged in.",
