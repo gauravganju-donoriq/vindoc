@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import PendingTransfers from "@/components/transfers/PendingTransfers";
 
 interface Vehicle {
   id: string;
@@ -48,6 +49,7 @@ const getExpiryStatus = (expiryDate: string | null) => {
 const Dashboard = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState<string | undefined>();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -58,6 +60,7 @@ const Dashboard = () => {
         navigate("/auth");
         return;
       }
+      setUserEmail(session.user.email);
       fetchVehicles();
     };
 
@@ -167,6 +170,9 @@ const Dashboard = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        {/* Pending Transfers Section */}
+        <PendingTransfers userEmail={userEmail} onTransferAccepted={fetchVehicles} />
+
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold">My Vehicles</h2>

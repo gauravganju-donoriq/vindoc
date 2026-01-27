@@ -23,6 +23,7 @@ import {
 import DetailItem from "@/components/vehicle/DetailItem";
 import SectionCard from "@/components/vehicle/SectionCard";
 import { useRefreshVehicle } from "@/hooks/useRefreshVehicle";
+import TransferVehicleDialog from "@/components/vehicle/TransferVehicleDialog";
 
 interface Vehicle {
   id: string;
@@ -337,24 +338,32 @@ const VehicleDetails = () => {
                 </div>
               </div>
               <div className="flex flex-col items-end gap-2">
-                <Button
-                  variant={canRefresh ? "default" : "outline"}
-                  size="sm"
-                  onClick={refreshVehicleData}
-                  disabled={!canRefresh || isRefreshing}
-                >
-                  {isRefreshing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Refreshing...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Refresh Data
-                    </>
-                  )}
-                </Button>
+                <div className="flex gap-2">
+                  <TransferVehicleDialog
+                    vehicleId={vehicle.id}
+                    vehicleNumber={vehicle.registration_number}
+                    vehicleModel={vehicle.maker_model || vehicle.manufacturer}
+                    onTransferInitiated={fetchVehicle}
+                  />
+                  <Button
+                    variant={canRefresh ? "default" : "outline"}
+                    size="sm"
+                    onClick={refreshVehicleData}
+                    disabled={!canRefresh || isRefreshing}
+                  >
+                    {isRefreshing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Refreshing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Refresh Data
+                      </>
+                    )}
+                  </Button>
+                </div>
                 <span className="text-xs text-muted-foreground">
                   {vehicle.data_last_fetched_at ? (
                     timeUntilRefresh ? (
