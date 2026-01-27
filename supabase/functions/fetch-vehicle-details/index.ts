@@ -90,7 +90,7 @@ serve(async (req) => {
       owner_name: data.owner_name || null,
       vehicle_class: data.class || null,
       fuel_type: data.fuel_type || null,
-      maker_model: data.brand_model || null,
+      maker_model: data.brand_model && data.brand_model !== "Not Available" ? data.brand_model : null,
       manufacturer: data.brand_name || null,
       registration_date: parseIndianDate(data.registration_date),
       insurance_company: data.insurance_company || null,
@@ -99,6 +99,17 @@ serve(async (req) => {
       fitness_valid_upto: null,
       road_tax_valid_upto: parseIndianDate(data.tax_paid_upto || data.tax_upto),
       rc_status: data.rc_status || null,
+      // New fields for comprehensive tracking and resale
+      engine_number: data.engine_number && data.engine_number !== "NA" ? data.engine_number : null,
+      chassis_number: data.chassis_number && data.chassis_number !== "NA" ? data.chassis_number : null,
+      color: data.color || null,
+      seating_capacity: data.seating_capacity ? parseInt(data.seating_capacity) : null,
+      cubic_capacity: data.cubic_capacity ? parseInt(data.cubic_capacity) : null,
+      owner_count: data.owner_count ? parseInt(data.owner_count) : null,
+      emission_norms: data.norms && data.norms !== "Not Available" ? data.norms : null,
+      is_financed: data.is_financed === "1",
+      financer: data.financer || null,
+      noc_details: data.noc_details && data.noc_details !== "NA" ? data.noc_details : null,
     };
 
     console.log("Vehicle data mapped successfully");

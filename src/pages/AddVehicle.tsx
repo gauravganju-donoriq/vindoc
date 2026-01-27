@@ -22,6 +22,17 @@ interface FetchedVehicleData {
   fitness_valid_upto?: string;
   road_tax_valid_upto?: string;
   rc_status?: string;
+  // New fields
+  engine_number?: string;
+  chassis_number?: string;
+  color?: string;
+  seating_capacity?: number;
+  cubic_capacity?: number;
+  owner_count?: number;
+  emission_norms?: string;
+  is_financed?: boolean;
+  financer?: string;
+  noc_details?: string;
 }
 
 const AddVehicle = () => {
@@ -121,6 +132,17 @@ const AddVehicle = () => {
         fitness_valid_upto: fetchedData?.fitness_valid_upto || fitnessExpiry || null,
         road_tax_valid_upto: fetchedData?.road_tax_valid_upto || null,
         rc_status: fetchedData?.rc_status || null,
+        // New fields
+        engine_number: fetchedData?.engine_number || null,
+        chassis_number: fetchedData?.chassis_number || null,
+        color: fetchedData?.color || null,
+        seating_capacity: fetchedData?.seating_capacity || null,
+        cubic_capacity: fetchedData?.cubic_capacity || null,
+        owner_count: fetchedData?.owner_count || null,
+        emission_norms: fetchedData?.emission_norms || null,
+        is_financed: fetchedData?.is_financed || false,
+        financer: fetchedData?.financer || null,
+        noc_details: fetchedData?.noc_details || null,
         raw_api_data: fetchedData ? JSON.stringify(fetchedData) : null,
       };
 
@@ -230,6 +252,12 @@ const AddVehicle = () => {
                       <span className="font-medium">{fetchedData.owner_name}</span>
                     </div>
                   )}
+                  {fetchedData.manufacturer && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Manufacturer:</span>
+                      <span className="font-medium">{fetchedData.manufacturer}</span>
+                    </div>
+                  )}
                   {fetchedData.maker_model && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Model:</span>
@@ -240,6 +268,38 @@ const AddVehicle = () => {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Fuel:</span>
                       <span className="font-medium">{fetchedData.fuel_type}</span>
+                    </div>
+                  )}
+                  {fetchedData.color && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Color:</span>
+                      <span className="font-medium">{fetchedData.color}</span>
+                    </div>
+                  )}
+                  {fetchedData.cubic_capacity && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Engine CC:</span>
+                      <span className="font-medium">{fetchedData.cubic_capacity} cc</span>
+                    </div>
+                  )}
+                  {fetchedData.seating_capacity && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Seats:</span>
+                      <span className="font-medium">{fetchedData.seating_capacity}</span>
+                    </div>
+                  )}
+                  {fetchedData.owner_count && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Owners:</span>
+                      <span className="font-medium">{fetchedData.owner_count}</span>
+                    </div>
+                  )}
+                  {fetchedData.registration_date && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Registered:</span>
+                      <span className="font-medium">
+                        {format(new Date(fetchedData.registration_date), "dd MMM yyyy")}
+                      </span>
                     </div>
                   )}
                   {fetchedData.insurance_expiry && (
@@ -258,12 +318,26 @@ const AddVehicle = () => {
                       </span>
                     </div>
                   )}
-                  {fetchedData.fitness_valid_upto && (
+                  {fetchedData.road_tax_valid_upto && (
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Fitness Valid Until:</span>
+                      <span className="text-muted-foreground">Road Tax Until:</span>
                       <span className="font-medium">
-                        {format(new Date(fetchedData.fitness_valid_upto), "dd MMM yyyy")}
+                        {format(new Date(fetchedData.road_tax_valid_upto), "dd MMM yyyy")}
                       </span>
+                    </div>
+                  )}
+                  {fetchedData.rc_status && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">RC Status:</span>
+                      <span className={`font-medium ${fetchedData.rc_status === 'ACTIVE' ? 'text-green-600' : 'text-red-600'}`}>
+                        {fetchedData.rc_status}
+                      </span>
+                    </div>
+                  )}
+                  {fetchedData.is_financed && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Financed:</span>
+                      <span className="font-medium text-amber-600">Yes {fetchedData.financer && `(${fetchedData.financer})`}</span>
                     </div>
                   )}
                 </CardContent>
