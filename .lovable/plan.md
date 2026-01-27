@@ -1,65 +1,157 @@
 
+# Detailed Vehicle Profile Page
 
-# Plan: Debug and Fix Vehicle API Integration
+## Overview
+Enhance the existing VehicleDetails page to display all vehicle fields in an organized, sectioned layout. The page will present comprehensive vehicle information that's useful for both document tracking and potential resale purposes.
 
-## Problem Analysis
+## Page Structure
 
-After comparing the RapidAPI code snippet with our implementation, I found that our code is technically correct. The 502 error message from the logs says:
+The profile will be organized into 6 distinct sections:
 
-```
-"API Request failed due to Provider configuration error: The API response body transformation failed to parse content-type application/json"
-```
-
-This indicates the issue is on the **API provider's side**, not our code. However, there's one small thing we can try.
-
-## What We'll Try
-
-### 1. Match Exact Header Order from RapidAPI
-Although header order shouldn't matter in HTTP, some poorly implemented APIs might be sensitive to it. The RapidAPI snippet shows:
-- `x-rapidapi-key` first
-- `x-rapidapi-host` second  
-- `Content-Type` third
-
-Our code has `Content-Type` first. We'll reorder to match exactly.
-
-### 2. Add Request Body Logging
-Add logging to see the exact request body being sent.
-
-### 3. Test with Direct Call
-After deploying, we'll test the function directly to verify the fix.
-
-## Technical Changes
-
-**File: `supabase/functions/fetch-vehicle-details/index.ts`**
-
-Update the headers to match the exact order from RapidAPI:
-
-```typescript
-const response = await fetch('https://vehicle-rc-information-v2.p.rapidapi.com/', {
-  method: 'POST',
-  headers: {
-    'x-rapidapi-key': rapidApiKey,
-    'x-rapidapi-host': 'vehicle-rc-information-v2.p.rapidapi.com',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({ vehicle_number: registrationNumber }),
-});
+```text
++------------------------------------------+
+|  Header: Registration + Quick Status     |
++------------------------------------------+
+|  Section 1: Vehicle Identity             |
+|  - Reg Number, Make/Model, Color, etc.   |
++------------------------------------------+
+|  Section 2: Technical Specifications     |
+|  - Engine, CC, Seats, Weight, etc.       |
++------------------------------------------+
+|  Section 3: Ownership & Finance          |
+|  - Owner, Count, Finance Status, NOC     |
++------------------------------------------+
+|  Section 4: Document Expiry Status       |
+|  - Insurance, PUCC, Fitness, Road Tax    |
++------------------------------------------+
+|  Section 5: Document Repository          |
+|  - Upload & manage documents             |
++------------------------------------------+
 ```
 
-Also add logging for the request body:
-```typescript
-console.log('Request body:', JSON.stringify({ vehicle_number: registrationNumber }));
-```
+## Detailed Sections
 
-## Important Note
+### 1. Header Card (Enhanced)
+- Large registration number display with RC status badge
+- Manufacturer + Model as subtitle
+- Quick summary: Fuel type, Year registered, Owner count
+- Visual icon representing vehicle class
 
-If this still returns a 502 error, it confirms the issue is entirely on RapidAPI's provider side. In that case, our options are:
+### 2. Vehicle Identity Section
+| Field | Description |
+|-------|-------------|
+| Registration Number | Primary identifier |
+| Manufacturer | Brand name (e.g., BMW INDIA PVT LTD) |
+| Model | Maker/model name |
+| Vehicle Class | Type classification |
+| Vehicle Category | Category classification |
+| Body Type | Sedan, SUV, Hatchback, etc. |
+| Color | Vehicle color |
+| Registration Date | Initial registration |
+| RC Status | Active/Inactive status with badge |
 
-1. **Wait** for the API provider to fix their issue
-2. **Switch** to a different, more reliable Vehicle RC API
-3. **Rely on manual entry** as the primary method for now
+### 3. Technical Specifications Section
+| Field | Description |
+|-------|-------------|
+| Engine Number | Engine identification |
+| Chassis Number | Chassis identification |
+| Cubic Capacity | Engine CC |
+| Fuel Type | Petrol/Diesel/CNG/Electric |
+| Seating Capacity | Number of seats |
+| Emission Norms | BS-IV, BS-VI, etc. |
+| Wheelbase | If available |
+| Gross Vehicle Weight | If available |
+| Unladen Weight | If available |
 
-## Testing
+### 4. Ownership & Finance Section
+| Field | Description |
+|-------|-------------|
+| Owner Name | Current registered owner |
+| Owner Count | Number of previous owners |
+| Finance Status | Financed/Not Financed with badge |
+| Financer Name | If financed |
+| NOC Details | No Objection Certificate status |
 
-After the changes, we'll test by calling the edge function directly with a registration number to verify the response.
+### 5. Document Expiry Status (Already exists, will enhance)
+- Insurance expiry with company name
+- PUCC validity
+- Fitness certificate validity
+- Road tax validity
+- Each with visual status badges (Valid/Expiring/Expired)
 
+### 6. Document Repository (Keep existing)
+- Document upload functionality
+- List of uploaded documents
+- Download and delete actions
+
+## Technical Implementation
+
+### File Changes
+**`src/pages/VehicleDetails.tsx`** - Major update:
+
+1. **Update Vehicle Interface**
+   - Add all new fields from the database schema:
+   ```
+   engine_number, chassis_number, color, seating_capacity,
+   cubic_capacity, owner_count, emission_norms, is_financed,
+   financer, noc_details, vehicle_category, body_type,
+   wheelbase, gross_vehicle_weight, unladen_weight
+   ```
+
+2. **Create Reusable DetailItem Component**
+   - Clean display of label/value pairs
+   - Handles null/undefined values gracefully
+
+3. **Add Collapsible Sections**
+   - Use existing Collapsible component from shadcn
+   - Allow users to expand/collapse sections
+   - Default all sections open
+
+4. **Implement Section Components**
+   - VehicleIdentitySection
+   - TechnicalSpecsSection
+   - OwnershipFinanceSection
+   - Each renders a grid of detail items
+
+5. **Visual Enhancements**
+   - Use appropriate icons for each section (Car, Settings, User, Calendar, Shield)
+   - Highlight important values (finance status, owner count)
+   - Show "Not Available" for missing data in muted style
+
+### New UI Components Used
+- Existing: Card, Badge, Button, Collapsible
+- Icons: Car, Settings, User, Users, Banknote, Fuel, Calendar, Shield, FileText, Gauge, Palette
+
+### Responsive Design
+- Single column on mobile
+- 2-column grid on tablet (sm:grid-cols-2)
+- 3-column grid on desktop for technical specs (lg:grid-cols-3)
+
+## User Experience
+
+1. **Clean Information Hierarchy**
+   - Most important info (reg number, status) at top
+   - Detailed specs organized logically
+   - Documents and expiry tracking easily accessible
+
+2. **Resale-Ready Information**
+   - Owner count prominently displayed
+   - Finance status clearly shown
+   - All technical specs for buyer reference
+
+3. **Visual Status Indicators**
+   - Green badge for active/valid status
+   - Yellow badge for expiring soon
+   - Red badge for expired/issues
+
+## Implementation Order
+
+1. Update Vehicle interface with all fields
+2. Create DetailItem helper component
+3. Restructure header card with enhanced info
+4. Add Vehicle Identity section
+5. Add Technical Specifications section
+6. Add Ownership & Finance section
+7. Keep existing Document Expiry and Repository sections
+8. Add Collapsible wrappers for each section
+9. Test responsive behavior
