@@ -21,12 +21,32 @@ interface Vehicle {
   vehicle_class: string | null;
 }
 
+interface ServiceRecord {
+  id: string;
+  vehicle_id: string;
+  user_id: string;
+  service_type: string;
+  service_date: string;
+  next_service_due_date: string | null;
+  next_service_due_km: number | null;
+  odometer_reading: number | null;
+  service_center: string | null;
+}
+
 interface ExpiringDocument {
   vehicle: Vehicle;
   documentType: "insurance" | "pucc" | "fitness" | "road_tax";
   expiryDate: string;
   daysUntilExpiry: number;
   notificationType: "30_day" | "7_day" | "expired";
+}
+
+interface ServiceReminder {
+  vehicle: Vehicle;
+  serviceRecord: ServiceRecord;
+  dueDate: string;
+  daysUntilDue: number;
+  notificationType: "30_day" | "7_day" | "overdue";
 }
 
 interface AIContent {
@@ -36,10 +56,17 @@ interface AIContent {
   consequences: string;
 }
 
+interface ServiceAIContent {
+  reminder: string;
+  tip: string;
+  urgency: string;
+}
+
 interface UserAlert {
   userId: string;
   userEmail: string;
   documents: Array<ExpiringDocument & { aiContent: AIContent }>;
+  services: Array<ServiceReminder & { aiContent: ServiceAIContent }>;
 }
 
 const DOCUMENT_LABELS: Record<string, string> = {
@@ -47,6 +74,19 @@ const DOCUMENT_LABELS: Record<string, string> = {
   pucc: "PUCC (Pollution Certificate)",
   fitness: "Fitness Certificate",
   road_tax: "Road Tax",
+};
+
+const SERVICE_TYPE_LABELS: Record<string, string> = {
+  regular_service: "Regular Service",
+  oil_change: "Oil Change",
+  tire_replacement: "Tire Replacement",
+  brake_service: "Brake Service",
+  battery_replacement: "Battery Replacement",
+  repair: "Repair",
+  body_work: "Body Work",
+  electrical: "Electrical",
+  ac_service: "AC Service",
+  other: "Other Service",
 };
 
 serve(async (req) => {
@@ -70,7 +110,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const resend = new Resend(resendApiKey);
 
-    console.log("Starting expiry alert check...");
+    console.log("Starting expiry and service alert check...");
 
     // Fetch all vehicles with their expiry dates
     const { data: vehicles, error: vehiclesError } = await supabase
@@ -82,12 +122,24 @@ serve(async (req) => {
       throw vehiclesError;
     }
 
-    console.log(`Found ${vehicles?.length || 0} vehicles to check`);
+    // Fetch all service records with upcoming due dates
+    const { data: serviceRecords, error: serviceError } = await supabase
+      .from("service_records")
+      .select("id, vehicle_id, user_id, service_type, service_date, next_service_due_date, next_service_due_km, odometer_reading, service_center")
+      .not("next_service_due_date", "is", null);
+
+    if (serviceError) {
+      console.error("Error fetching service records:", serviceError);
+      throw serviceError;
+    }
+
+    console.log(`Found ${vehicles?.length || 0} vehicles and ${serviceRecords?.length || 0} service records to check`);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const expiringDocuments: ExpiringDocument[] = [];
+    const serviceReminders: ServiceReminder[] = [];
 
     // Check each vehicle for expiring documents
     for (const vehicle of vehicles || []) {
@@ -128,11 +180,45 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Found ${expiringDocuments.length} expiring documents`);
+    // Check each service record for upcoming due dates
+    const vehicleMap = new Map((vehicles || []).map(v => [v.id, v]));
+    
+    for (const record of serviceRecords || []) {
+      if (!record.next_service_due_date) continue;
 
-    if (expiringDocuments.length === 0) {
+      const vehicle = vehicleMap.get(record.vehicle_id);
+      if (!vehicle) continue;
+
+      const dueDate = new Date(record.next_service_due_date);
+      dueDate.setHours(0, 0, 0, 0);
+      const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+      let notificationType: "30_day" | "7_day" | "overdue" | null = null;
+
+      if (daysUntilDue <= 0) {
+        notificationType = "overdue";
+      } else if (daysUntilDue <= 7) {
+        notificationType = "7_day";
+      } else if (daysUntilDue <= 30) {
+        notificationType = "30_day";
+      }
+
+      if (notificationType) {
+        serviceReminders.push({
+          vehicle,
+          serviceRecord: record,
+          dueDate: record.next_service_due_date,
+          daysUntilDue,
+          notificationType,
+        });
+      }
+    }
+
+    console.log(`Found ${expiringDocuments.length} expiring documents and ${serviceReminders.length} service reminders`);
+
+    if (expiringDocuments.length === 0 && serviceReminders.length === 0) {
       return new Response(
-        JSON.stringify({ message: "No expiring documents found", processed: 0 }),
+        JSON.stringify({ message: "No expiring documents or service reminders found", processed: 0 }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -157,31 +243,44 @@ serve(async (req) => {
       (doc) => !notifiedSet.has(`${doc.vehicle.id}-${doc.documentType}-${doc.notificationType}`)
     );
 
-    console.log(`${newDocuments.length} new documents to notify about`);
+    const newServiceReminders = serviceReminders.filter(
+      (reminder) => !notifiedSet.has(`${reminder.vehicle.id}-service_${reminder.serviceRecord.id}-${reminder.notificationType}`)
+    );
 
-    if (newDocuments.length === 0) {
+    console.log(`${newDocuments.length} new documents and ${newServiceReminders.length} new service reminders to notify about`);
+
+    if (newDocuments.length === 0 && newServiceReminders.length === 0) {
       return new Response(
-        JSON.stringify({ message: "All expiring documents already notified", processed: 0 }),
+        JSON.stringify({ message: "All expiring documents and services already notified", processed: 0 }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // Group by user
-    const userDocuments = new Map<string, ExpiringDocument[]>();
+    const userAlerts = new Map<string, { documents: ExpiringDocument[], services: ServiceReminder[] }>();
+    
     for (const doc of newDocuments) {
       const userId = doc.vehicle.user_id;
-      if (!userDocuments.has(userId)) {
-        userDocuments.set(userId, []);
+      if (!userAlerts.has(userId)) {
+        userAlerts.set(userId, { documents: [], services: [] });
       }
-      userDocuments.get(userId)!.push(doc);
+      userAlerts.get(userId)!.documents.push(doc);
     }
 
-    console.log(`Processing alerts for ${userDocuments.size} users`);
+    for (const reminder of newServiceReminders) {
+      const userId = reminder.vehicle.user_id;
+      if (!userAlerts.has(userId)) {
+        userAlerts.set(userId, { documents: [], services: [] });
+      }
+      userAlerts.get(userId)!.services.push(reminder);
+    }
+
+    console.log(`Processing alerts for ${userAlerts.size} users`);
 
     let emailsSent = 0;
     let notificationsLogged = 0;
 
-    for (const [userId, docs] of userDocuments) {
+    for (const [userId, alerts] of userAlerts) {
       // Get user email from auth.users
       const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
       
@@ -191,18 +290,16 @@ serve(async (req) => {
       }
 
       const userEmail = userData.user.email;
-      console.log(`Processing ${docs.length} documents for user ${userEmail}`);
+      console.log(`Processing ${alerts.documents.length} documents and ${alerts.services.length} services for user ${userEmail}`);
 
       // Generate AI content for each document
       const documentsWithAI: Array<ExpiringDocument & { aiContent: AIContent }> = [];
-
-      for (const doc of docs) {
+      for (const doc of alerts.documents) {
         try {
-          const aiContent = await generateAIContent(doc, lovableApiKey);
+          const aiContent = await generateDocumentAIContent(doc, lovableApiKey);
           documentsWithAI.push({ ...doc, aiContent });
         } catch (aiError) {
           console.error(`AI generation failed for ${doc.documentType}:`, aiError);
-          // Use fallback content
           documentsWithAI.push({
             ...doc,
             aiContent: {
@@ -215,9 +312,28 @@ serve(async (req) => {
         }
       }
 
+      // Generate AI content for each service reminder
+      const servicesWithAI: Array<ServiceReminder & { aiContent: ServiceAIContent }> = [];
+      for (const reminder of alerts.services) {
+        try {
+          const aiContent = await generateServiceAIContent(reminder, lovableApiKey);
+          servicesWithAI.push({ ...reminder, aiContent });
+        } catch (aiError) {
+          console.error(`AI generation failed for service:`, aiError);
+          servicesWithAI.push({
+            ...reminder,
+            aiContent: {
+              reminder: `Your ${SERVICE_TYPE_LABELS[reminder.serviceRecord.service_type] || "service"} is ${reminder.notificationType === "overdue" ? "overdue" : "due soon"}.`,
+              tip: "Regular maintenance keeps your vehicle running smoothly and prevents costly repairs.",
+              urgency: reminder.notificationType === "overdue" ? "High" : reminder.notificationType === "7_day" ? "Medium" : "Low",
+            },
+          });
+        }
+      }
+
       // Send consolidated email
       try {
-        await sendConsolidatedEmail(resend, userEmail, documentsWithAI);
+        await sendConsolidatedEmail(resend, userEmail, documentsWithAI, servicesWithAI);
         emailsSent++;
         console.log(`Email sent to ${userEmail}`);
       } catch (emailError) {
@@ -225,7 +341,7 @@ serve(async (req) => {
         continue;
       }
 
-      // Log notifications to prevent duplicates
+      // Log document notifications
       for (const doc of documentsWithAI) {
         const { error: insertError } = await supabase
           .from("expiry_notifications")
@@ -244,7 +360,26 @@ serve(async (req) => {
         }
       }
 
-      // Log to vehicle history
+      // Log service notifications
+      for (const reminder of servicesWithAI) {
+        const { error: insertError } = await supabase
+          .from("expiry_notifications")
+          .insert({
+            vehicle_id: reminder.vehicle.id,
+            user_id: userId,
+            document_type: `service_${reminder.serviceRecord.id}`,
+            notification_type: reminder.notificationType,
+            ai_content: reminder.aiContent,
+          });
+
+        if (insertError) {
+          console.error("Failed to log service notification:", insertError);
+        } else {
+          notificationsLogged++;
+        }
+      }
+
+      // Log to vehicle history for documents
       for (const doc of documentsWithAI) {
         await supabase.from("vehicle_history").insert({
           vehicle_id: doc.vehicle.id,
@@ -258,13 +393,29 @@ serve(async (req) => {
           },
         });
       }
+
+      // Log to vehicle history for services
+      for (const reminder of servicesWithAI) {
+        await supabase.from("vehicle_history").insert({
+          vehicle_id: reminder.vehicle.id,
+          user_id: userId,
+          event_type: "service_reminder",
+          event_description: `Service reminder sent: ${SERVICE_TYPE_LABELS[reminder.serviceRecord.service_type] || "Service"} ${reminder.notificationType === "overdue" ? "overdue" : `due in ${reminder.daysUntilDue} days`}`,
+          metadata: {
+            service_type: reminder.serviceRecord.service_type,
+            notification_type: reminder.notificationType,
+            days_until_due: reminder.daysUntilDue,
+            service_record_id: reminder.serviceRecord.id,
+          },
+        });
+      }
     }
 
     console.log(`Completed: ${emailsSent} emails sent, ${notificationsLogged} notifications logged`);
 
     return new Response(
       JSON.stringify({
-        message: "Expiry alerts processed successfully",
+        message: "Expiry and service alerts processed successfully",
         emailsSent,
         notificationsLogged,
       }),
@@ -279,7 +430,7 @@ serve(async (req) => {
   }
 });
 
-async function generateAIContent(doc: ExpiringDocument, apiKey: string): Promise<AIContent> {
+async function generateDocumentAIContent(doc: ExpiringDocument, apiKey: string): Promise<AIContent> {
   const vehicleAge = doc.vehicle.registration_date
     ? new Date().getFullYear() - new Date(doc.vehicle.registration_date).getFullYear()
     : null;
@@ -365,21 +516,114 @@ Provide practical, India-specific advice.`;
   return JSON.parse(toolCall.function.arguments);
 }
 
+async function generateServiceAIContent(reminder: ServiceReminder, apiKey: string): Promise<ServiceAIContent> {
+  const serviceType = SERVICE_TYPE_LABELS[reminder.serviceRecord.service_type] || reminder.serviceRecord.service_type;
+  
+  const prompt = `You are an expert on vehicle maintenance in India.
+
+Generate a service reminder for:
+
+Vehicle: ${reminder.vehicle.maker_model || reminder.vehicle.registration_number}
+Fuel Type: ${reminder.vehicle.fuel_type || "Unknown"}
+Registration: ${reminder.vehicle.registration_number}
+
+Service Type: ${serviceType}
+Last Service Date: ${reminder.serviceRecord.service_date}
+Last Odometer: ${reminder.serviceRecord.odometer_reading ? `${reminder.serviceRecord.odometer_reading.toLocaleString()} km` : "Unknown"}
+Service Center: ${reminder.serviceRecord.service_center || "Not specified"}
+Due Date: ${reminder.dueDate}
+Days Until Due: ${reminder.daysUntilDue}
+Status: ${reminder.notificationType === "overdue" ? "OVERDUE" : reminder.notificationType === "7_day" ? "Due within 7 days" : "Due within 30 days"}
+
+Provide a helpful, India-specific maintenance reminder.`;
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-3-flash-preview",
+      messages: [
+        { role: "system", content: "You are a helpful assistant that provides vehicle maintenance advice for Indian vehicle owners. Always respond with valid JSON." },
+        { role: "user", content: prompt },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "provide_service_reminder",
+            description: "Provide structured service reminder for a vehicle",
+            parameters: {
+              type: "object",
+              properties: {
+                reminder: {
+                  type: "string",
+                  description: "A friendly reminder message about the upcoming service (max 50 words)",
+                },
+                tip: {
+                  type: "string",
+                  description: "Practical maintenance tip relevant to this service type (max 80 words)",
+                },
+                urgency: {
+                  type: "string",
+                  description: "Urgency level: High, Medium, or Low",
+                },
+              },
+              required: ["reminder", "tip", "urgency"],
+              additionalProperties: false,
+            },
+          },
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "provide_service_reminder" } },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("AI API error:", response.status, errorText);
+    throw new Error(`AI API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+  
+  if (!toolCall?.function?.arguments) {
+    throw new Error("No tool call in AI response");
+  }
+
+  return JSON.parse(toolCall.function.arguments);
+}
+
 async function sendConsolidatedEmail(
   resend: InstanceType<typeof Resend>,
   email: string,
-  documents: Array<ExpiringDocument & { aiContent: AIContent }>
+  documents: Array<ExpiringDocument & { aiContent: AIContent }>,
+  services: Array<ServiceReminder & { aiContent: ServiceAIContent }>
 ): Promise<void> {
   const expiredCount = documents.filter((d) => d.notificationType === "expired").length;
-  const urgentCount = documents.filter((d) => d.notificationType === "7_day").length;
-  const upcomingCount = documents.filter((d) => d.notificationType === "30_day").length;
+  const urgentDocCount = documents.filter((d) => d.notificationType === "7_day").length;
+  const upcomingDocCount = documents.filter((d) => d.notificationType === "30_day").length;
+  
+  const overdueServiceCount = services.filter((s) => s.notificationType === "overdue").length;
+  const urgentServiceCount = services.filter((s) => s.notificationType === "7_day").length;
+  const upcomingServiceCount = services.filter((s) => s.notificationType === "30_day").length;
 
-  const subject = expiredCount > 0
-    ? `🚨 ${expiredCount} Document(s) Expired - Immediate Action Required`
-    : urgentCount > 0
-    ? `⚠️ ${urgentCount} Document(s) Expiring Soon - Action Needed`
-    : `📋 ${upcomingCount} Document(s) Expiring in 30 Days`;
+  const hasDocuments = documents.length > 0;
+  const hasServices = services.length > 0;
 
+  let subject: string;
+  if (expiredCount > 0 || overdueServiceCount > 0) {
+    subject = `🚨 Action Required: ${expiredCount > 0 ? `${expiredCount} Expired Document(s)` : ""}${expiredCount > 0 && overdueServiceCount > 0 ? " & " : ""}${overdueServiceCount > 0 ? `${overdueServiceCount} Overdue Service(s)` : ""}`;
+  } else if (urgentDocCount > 0 || urgentServiceCount > 0) {
+    subject = `⚠️ Reminder: ${urgentDocCount + urgentServiceCount} Item(s) Need Attention This Week`;
+  } else {
+    subject = `📋 Upcoming: ${upcomingDocCount + upcomingServiceCount} Item(s) Due in 30 Days`;
+  }
+
+  // Document rows
   const documentRows = documents
     .map((doc) => {
       const statusEmoji = doc.notificationType === "expired" ? "🔴" : doc.notificationType === "7_day" ? "🟠" : "🟡";
@@ -420,6 +664,45 @@ async function sendConsolidatedEmail(
     })
     .join("");
 
+  // Service rows
+  const serviceRows = services
+    .map((reminder) => {
+      const statusEmoji = reminder.notificationType === "overdue" ? "🔴" : reminder.notificationType === "7_day" ? "🟠" : "🟡";
+      const statusText = reminder.notificationType === "overdue"
+        ? "OVERDUE"
+        : reminder.daysUntilDue === 1
+        ? "Due tomorrow"
+        : `Due in ${reminder.daysUntilDue} days`;
+
+      return `
+        <tr>
+          <td style="padding: 16px; border-bottom: 1px solid #e5e7eb;">
+            <div style="font-weight: 600; color: #1f2937;">${reminder.vehicle.registration_number}</div>
+            <div style="font-size: 14px; color: #6b7280;">${reminder.vehicle.maker_model || "Vehicle"}</div>
+          </td>
+          <td style="padding: 16px; border-bottom: 1px solid #e5e7eb;">
+            <div style="font-weight: 500;">🔧 ${SERVICE_TYPE_LABELS[reminder.serviceRecord.service_type] || "Service"}</div>
+            ${reminder.serviceRecord.service_center ? `<div style="font-size: 12px; color: #6b7280;">at ${reminder.serviceRecord.service_center}</div>` : ""}
+          </td>
+          <td style="padding: 16px; border-bottom: 1px solid #e5e7eb;">
+            <div>${statusEmoji} ${statusText}</div>
+            <div style="font-size: 12px; color: #6b7280;">Due: ${new Date(reminder.dueDate).toLocaleDateString("en-IN")}</div>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="3" style="padding: 16px; background-color: #fef3c7; border-bottom: 1px solid #e5e7eb;">
+            <div style="margin-bottom: 8px;">
+              <strong>🔔 ${reminder.aiContent.reminder}</strong>
+            </div>
+            <div style="color: #92400e;">
+              <strong>💡 Tip:</strong> ${reminder.aiContent.tip}
+            </div>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -429,17 +712,20 @@ async function sendConsolidatedEmail(
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #374151; max-width: 600px; margin: 0 auto; padding: 20px;">
       <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
-        <h1 style="color: white; margin: 0; font-size: 24px;">🚗 Vehicle Document Alert</h1>
-        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0;">Your documents need attention</p>
+        <h1 style="color: white; margin: 0; font-size: 24px;">🚗 Vehicle Reminder</h1>
+        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0;">Documents & Services need your attention</p>
       </div>
       
       <div style="background: white; padding: 24px; border: 1px solid #e5e7eb; border-top: none;">
         <div style="display: flex; gap: 16px; margin-bottom: 24px; text-align: center;">
           ${expiredCount > 0 ? `<div style="flex: 1; background: #fef2f2; padding: 12px; border-radius: 8px;"><div style="font-size: 24px; font-weight: bold; color: #dc2626;">${expiredCount}</div><div style="font-size: 12px; color: #991b1b;">Expired</div></div>` : ""}
-          ${urgentCount > 0 ? `<div style="flex: 1; background: #fff7ed; padding: 12px; border-radius: 8px;"><div style="font-size: 24px; font-weight: bold; color: #ea580c;">${urgentCount}</div><div style="font-size: 12px; color: #9a3412;">Within 7 days</div></div>` : ""}
-          ${upcomingCount > 0 ? `<div style="flex: 1; background: #fefce8; padding: 12px; border-radius: 8px;"><div style="font-size: 24px; font-weight: bold; color: #ca8a04;">${upcomingCount}</div><div style="font-size: 12px; color: #854d0e;">Within 30 days</div></div>` : ""}
+          ${overdueServiceCount > 0 ? `<div style="flex: 1; background: #fef2f2; padding: 12px; border-radius: 8px;"><div style="font-size: 24px; font-weight: bold; color: #dc2626;">${overdueServiceCount}</div><div style="font-size: 12px; color: #991b1b;">Overdue</div></div>` : ""}
+          ${urgentDocCount + urgentServiceCount > 0 ? `<div style="flex: 1; background: #fff7ed; padding: 12px; border-radius: 8px;"><div style="font-size: 24px; font-weight: bold; color: #ea580c;">${urgentDocCount + urgentServiceCount}</div><div style="font-size: 12px; color: #9a3412;">This Week</div></div>` : ""}
+          ${upcomingDocCount + upcomingServiceCount > 0 ? `<div style="flex: 1; background: #fefce8; padding: 12px; border-radius: 8px;"><div style="font-size: 24px; font-weight: bold; color: #ca8a04;">${upcomingDocCount + upcomingServiceCount}</div><div style="font-size: 12px; color: #854d0e;">This Month</div></div>` : ""}
         </div>
 
+        ${hasDocuments ? `
+        <h2 style="font-size: 18px; color: #1f2937; margin: 24px 0 16px 0; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb;">📄 Document Renewals</h2>
         <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb;">
           <thead>
             <tr style="background: #f3f4f6;">
@@ -452,15 +738,32 @@ async function sendConsolidatedEmail(
             ${documentRows}
           </tbody>
         </table>
+        ` : ""}
+
+        ${hasServices ? `
+        <h2 style="font-size: 18px; color: #1f2937; margin: 24px 0 16px 0; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb;">🔧 Service Reminders</h2>
+        <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb;">
+          <thead>
+            <tr style="background: #fef3c7;">
+              <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #92400e;">Vehicle</th>
+              <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #92400e;">Service</th>
+              <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #92400e;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${serviceRows}
+          </tbody>
+        </table>
+        ` : ""}
 
         <div style="margin-top: 24px; text-align: center;">
-          <a href="https://cert-chaperone.lovable.app" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">View All Documents →</a>
+          <a href="https://cert-chaperone.lovable.app" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">View All Vehicles →</a>
         </div>
       </div>
 
       <div style="background: #f9fafb; padding: 16px; border-radius: 0 0 12px 12px; text-align: center; font-size: 12px; color: #6b7280; border: 1px solid #e5e7eb; border-top: none;">
         <p style="margin: 0;">This is an automated reminder from Cert Chaperone.</p>
-        <p style="margin: 4px 0 0 0;">Keep your vehicle documents up to date to avoid penalties.</p>
+        <p style="margin: 4px 0 0 0;">Keep your vehicle documents and maintenance up to date.</p>
       </div>
     </body>
     </html>
