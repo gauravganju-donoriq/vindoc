@@ -262,27 +262,60 @@ const VehicleDetails = () => {
     setIsEditing(false);
   };
 
+  // Preprocess image: resize and compress for AI analysis
+  const preprocessImage = async (file: File): Promise<{ base64: string; mimeType: string }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      img.onload = () => {
+        // Max dimension for AI processing
+        const MAX_SIZE = 1536;
+        let { width, height } = img;
+
+        // Resize if needed
+        if (width > MAX_SIZE || height > MAX_SIZE) {
+          if (width > height) {
+            height = (height / width) * MAX_SIZE;
+            width = MAX_SIZE;
+          } else {
+            width = (width / height) * MAX_SIZE;
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        // Convert to JPEG with 85% quality
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        const base64 = dataUrl.split(",")[1];
+        resolve({ base64, mimeType: "image/jpeg" });
+      };
+
+      img.onerror = () => reject(new Error("Failed to load image"));
+
+      // Create object URL from file
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   // Analyze document with AI
   const analyzeDocumentWithAI = async (file: File) => {
     setIsAnalyzing(true);
     try {
-      // Convert file to base64
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          const base64Data = result.split(",")[1];
-          resolve(base64Data);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      // Preprocess image (resize and compress)
+      const { base64, mimeType } = await preprocessImage(file);
+      
+      console.log(`Sending image for analysis: ${Math.round(base64.length * 0.75 / 1024)}KB`);
 
       const response = await supabase.functions.invoke("analyze-document", {
         body: {
           documentBase64: base64,
           documentType: selectedDocType,
-          mimeType: file.type,
+          mimeType: mimeType,
           vehicleContext: {
             registration_number: vehicle?.registration_number,
             current_values: vehicle,
@@ -296,6 +329,23 @@ const VehicleDetails = () => {
 
       const data = response.data;
       if (!data.success) {
+        // Handle specific error types
+        if (data.errorType === "rate_limit") {
+          toast({
+            title: "Please wait",
+            description: "Too many requests. Please try again in a moment.",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (data.errorType === "image_too_large") {
+          toast({
+            title: "Image too large",
+            description: "Please upload a smaller image.",
+            variant: "destructive",
+          });
+          return;
+        }
         throw new Error(data.error || "Analysis failed");
       }
 
