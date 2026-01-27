@@ -102,6 +102,26 @@ const VehicleDetails = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Refresh vehicle data hook - must be called unconditionally
+  const { isRefreshing, canRefresh, getTimeUntilRefresh, refreshVehicleData } = useRefreshVehicle({
+    vehicleId: vehicle?.id || "",
+    registrationNumber: vehicle?.registration_number || "",
+    dataLastFetchedAt: vehicle?.data_last_fetched_at || null,
+    onSuccess: () => {
+      // Re-fetch vehicle after refresh
+      if (id) {
+        supabase
+          .from("vehicles")
+          .select("*")
+          .eq("id", id)
+          .single()
+          .then(({ data }) => {
+            if (data) setVehicle(data);
+          });
+      }
+    },
+  });
+
   useEffect(() => {
     if (id) {
       fetchVehicle();
@@ -306,13 +326,6 @@ const VehicleDetails = () => {
     { label: "Fitness Certificate", date: vehicle.fitness_valid_upto },
     { label: "Road Tax", date: vehicle.road_tax_valid_upto },
   ];
-
-  const { isRefreshing, canRefresh, getTimeUntilRefresh, refreshVehicleData } = useRefreshVehicle({
-    vehicleId: vehicle.id,
-    registrationNumber: vehicle.registration_number,
-    dataLastFetchedAt: vehicle.data_last_fetched_at,
-    onSuccess: fetchVehicle,
-  });
 
   const timeUntilRefresh = getTimeUntilRefresh();
 
