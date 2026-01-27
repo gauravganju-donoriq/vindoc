@@ -81,12 +81,15 @@ Vehicle Registration Number for reference: ${vehicleContext?.registration_number
 
 Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
 
-    // Determine the correct media type
-    const mediaType = mimeType || "image/jpeg";
+    // Determine the correct media type - ensure it's a valid type
+    let mediaType = mimeType || "image/jpeg";
+    if (!mediaType.startsWith("image/")) {
+      mediaType = "image/jpeg";
+    }
 
-    console.log(`Sending request to AI gateway with model google/gemini-2.5-flash`);
+    console.log(`Sending request to AI gateway with model openai/gpt-5-mini`);
 
-    // Call Lovable AI with vision capabilities using the correct format
+    // Use OpenAI model which has better image handling
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -94,7 +97,7 @@ Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "openai/gpt-5-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { 
