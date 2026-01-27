@@ -539,6 +539,95 @@ const VehicleDetails = () => {
     }
   };
 
+  // Re-analyze an existing document with AI
+  const handleReanalyzeDocument = async (doc: Document) => {
+    // Only allow image files
+    const isImage = doc.file_path.match(/\.(jpg|jpeg|png|webp)$/i);
+    if (!isImage) {
+      toast({
+        title: "Not supported",
+        description: "AI scanning is only available for image documents (JPG, PNG, WebP).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      // Download the file from storage
+      const { data: fileBlob, error } = await supabase.storage
+        .from("vehicle-documents")
+        .download(doc.file_path);
+
+      if (error) throw error;
+
+      // Convert blob to File
+      const file = new File([fileBlob], doc.document_name, { type: fileBlob.type || "image/jpeg" });
+      
+      // Set the document type for context
+      setSelectedDocType(doc.document_type);
+      
+      // Preprocess and analyze
+      const { base64, mimeType } = await preprocessImage(file);
+      
+      console.log(`Re-analyzing document: ${Math.round(base64.length * 0.75 / 1024)}KB`);
+
+      const response = await supabase.functions.invoke("analyze-document", {
+        body: {
+          documentBase64: base64,
+          documentType: doc.document_type,
+          mimeType: mimeType,
+          vehicleContext: {
+            registration_number: vehicle?.registration_number,
+            current_values: vehicle,
+          },
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      const data = response.data;
+      if (!data.success) {
+        if (data.errorType === "rate_limit") {
+          toast({
+            title: "Please wait",
+            description: "Too many requests. Please try again in a moment.",
+            variant: "destructive",
+          });
+          return;
+        }
+        throw new Error(data.error || "Analysis failed");
+      }
+
+      if (Object.keys(data.extractedFields).length === 0) {
+        toast({
+          title: "No data extracted",
+          description: "Could not extract any fields from this document. Try a clearer image.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setAnalysisResult({
+        extractedFields: data.extractedFields,
+        confidence: data.confidence,
+        documentType: data.documentTypeDetected || doc.document_type,
+      });
+      setShowAnalysisModal(true);
+    } catch (error: any) {
+      console.error("AI re-analysis error:", error);
+      toast({
+        title: "Analysis failed",
+        description: error.message || "Could not analyze the document",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   const handleDeleteDocument = async (doc: Document) => {
     try {
       const { error: storageError } = await supabase.storage
@@ -1105,11 +1194,22 @@ const VehicleDetails = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleDownload(doc)}>
+                  <div className="flex gap-1">
+                    {doc.file_path.match(/\.(jpg|jpeg|png|webp)$/i) && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleReanalyzeDocument(doc)}
+                        disabled={isAnalyzing}
+                        title="Scan with AI"
+                      >
+                        <Sparkles className="h-4 w-4 text-primary" />
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={() => handleDownload(doc)} title="Download">
                       <Download className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteDocument(doc)}>
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteDocument(doc)} title="Delete">
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
