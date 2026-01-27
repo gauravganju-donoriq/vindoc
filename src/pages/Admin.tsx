@@ -6,7 +6,8 @@ import { AdminOverview } from "@/components/admin/AdminOverview";
 import { AdminUsers } from "@/components/admin/AdminUsers";
 import { AdminActivity } from "@/components/admin/AdminActivity";
 import { AdminVehicles } from "@/components/admin/AdminVehicles";
-import { Shield, ArrowLeft, LayoutDashboard, Users, Activity, Car } from "lucide-react";
+import { AdminTransfers } from "@/components/admin/AdminTransfers";
+import { Shield, ArrowLeft, LayoutDashboard, Users, Activity, Car, ArrowRightLeft } from "lucide-react";
 
 const Admin = () => {
   const { isAdmin, isLoading } = useAdminCheck(true);
@@ -42,7 +43,7 @@ const Admin = () => {
 
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
+          <TabsList className="grid w-full grid-cols-5 lg:w-[600px]">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <LayoutDashboard className="h-4 w-4" />
               <span className="hidden sm:inline">Overview</span>
@@ -51,13 +52,17 @@ const Admin = () => {
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">Users</span>
             </TabsTrigger>
-            <TabsTrigger value="activity" className="flex items-center gap-2">
-              <Activity className="h-4 w-4" />
-              <span className="hidden sm:inline">Activity</span>
-            </TabsTrigger>
             <TabsTrigger value="vehicles" className="flex items-center gap-2">
               <Car className="h-4 w-4" />
               <span className="hidden sm:inline">Vehicles</span>
+            </TabsTrigger>
+            <TabsTrigger value="transfers" className="flex items-center gap-2">
+              <ArrowRightLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Transfers</span>
+            </TabsTrigger>
+            <TabsTrigger value="activity" className="flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              <span className="hidden sm:inline">Activity</span>
             </TabsTrigger>
           </TabsList>
 
@@ -69,12 +74,16 @@ const Admin = () => {
             <AdminUsers />
           </TabsContent>
 
-          <TabsContent value="activity">
-            <AdminActivity />
-          </TabsContent>
-
           <TabsContent value="vehicles">
             <AdminVehicles />
+          </TabsContent>
+
+          <TabsContent value="transfers">
+            <AdminTransfers />
+          </TabsContent>
+
+          <TabsContent value="activity">
+            <AdminActivity />
           </TabsContent>
         </Tabs>
       </main>

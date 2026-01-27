@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { Search, ShieldCheck, ShieldX } from "lucide-react";
+import { Search, ShieldCheck, ShieldX, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface Vehicle {
   id: string;
@@ -23,8 +25,9 @@ export function AdminVehicles() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchVehicles = async () => {
     const fetchWithRetry = async (maxRetries = 2) => {
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -43,19 +46,19 @@ export function AdminVehicles() {
       }
     };
 
-    const fetchVehicles = async () => {
-      try {
-        const vehiclesData = await fetchWithRetry();
-        setVehicles(vehiclesData);
-        setFilteredVehicles(vehiclesData);
-      } catch (err: any) {
-        console.error("Failed to fetch vehicles:", err);
-        setError(err.message || "Failed to load vehicles");
-      } finally {
-        setLoading(false);
-      }
-    };
+    try {
+      const vehiclesData = await fetchWithRetry();
+      setVehicles(vehiclesData);
+      setFilteredVehicles(vehiclesData);
+    } catch (err: any) {
+      console.error("Failed to fetch vehicles:", err);
+      setError(err.message || "Failed to load vehicles");
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchVehicles();
   }, []);
 
@@ -75,6 +78,28 @@ export function AdminVehicles() {
     );
     setFilteredVehicles(filtered);
   }, [searchTerm, vehicles]);
+
+  const handleToggleVerification = async (vehicleId: string, currentStatus: boolean) => {
+    setActionLoading(vehicleId);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-data", {
+        body: { 
+          type: "set_vehicle_verification", 
+          vehicleId, 
+          isVerified: !currentStatus 
+        },
+      });
+
+      if (error) throw error;
+      toast.success(`Vehicle ${!currentStatus ? "verified" : "unverified"} successfully`);
+      await fetchVehicles();
+    } catch (err: any) {
+      console.error("Failed to update verification:", err);
+      toast.error(err.message || "Failed to update verification status");
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -134,6 +159,7 @@ export function AdminVehicles() {
                 <TableHead>User Email</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Added</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -162,6 +188,28 @@ export function AdminVehicles() {
                   </TableCell>
                   <TableCell>
                     {format(new Date(vehicle.created_at), "dd MMM yyyy")}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleToggleVerification(vehicle.id, !!vehicle.is_verified)}
+                      disabled={actionLoading === vehicle.id}
+                    >
+                      {actionLoading === vehicle.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : vehicle.is_verified ? (
+                        <>
+                          <ShieldX className="h-4 w-4 mr-1" />
+                          Unverify
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="h-4 w-4 mr-1" />
+                          Verify
+                        </>
+                      )}
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
