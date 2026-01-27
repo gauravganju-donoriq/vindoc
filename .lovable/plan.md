@@ -1,101 +1,121 @@
 
 
-# Fix AI Document Scanner
+# Plan: Universal Document Analysis & Auto-Extraction
 
-## Problem Identified
+## Overview
 
-After uploading a document, the AI extraction fails silently. Investigation revealed:
+Transform the document upload workflow to automatically analyze and extract data from any uploaded document, regardless of whether the user tags it with a specific type. The AI will detect the document type and extract all relevant vehicle fields.
 
-1. **AI Gateway Error**: Google Gemini returns `"Unable to process input image"` (400 error)
-2. **Image Format Issue**: The current image format in the API request is not being processed correctly by the Gemini model
-3. **Possible Request Size Issue**: Large base64 images may be causing timeout or size issues
+## Current Behavior vs New Behavior
 
-## Root Cause
+| Current | New |
+|---------|-----|
+| User must select document type dropdown | Document type selection becomes optional (can default to "auto-detect") |
+| AI only extracts fields for selected type | AI extracts ALL possible fields from any document |
+| Limited extraction if wrong type selected | AI detects document type automatically |
+| User might skip tagging entirely | Every image upload triggers smart extraction |
 
-The edge function formats the image as:
-```javascript
-{
-  type: "image_url",
-  image_url: {
-    url: `data:${mimeType};base64,${documentBase64}`
-  }
-}
+## Implementation Plan
+
+### 1. Update Edge Function for Universal Extraction
+
+Modify `supabase/functions/analyze-document/index.ts`:
+
+- Add a new "auto" document type that triggers universal extraction
+- When document type is "auto" or not recognized, extract ALL possible fields
+- Improve the AI prompt to first identify the document type, then extract relevant fields
+- Return the detected document type along with extracted fields
+
+**Key Changes:**
+```text
+- Add universal field list for "auto" mode (all fields from all document types)
+- Update system prompt to: "First identify what type of document this is, then extract all visible fields"
+- Always return document_type_detected in response
 ```
 
-This format may not be fully compatible with how the Lovable AI gateway expects images for Gemini vision models.
+### 2. Update Document Type Dropdown
 
-## Solution
+Modify `src/pages/VehicleDetails.tsx`:
 
-### 1. Update Edge Function Image Handling
+- Add "Auto-Detect" as the first/default option in the dropdown
+- Change default `selectedDocType` from "insurance" to "auto"
+- Keep existing document types for users who want to explicitly tag
 
-Modify the `analyze-document` edge function to:
-- Use the correct image format for Gemini via the Lovable AI gateway
-- Add image validation (size, format checks)
-- Add better error logging and handling
-- Return more informative error messages to the frontend
+**New dropdown options:**
+```text
+- Auto-Detect (Recommended) ← NEW default
+- Insurance Policy
+- Registration Certificate (RC)
+- PUCC Certificate
+- Fitness Certificate
+- Other Document
+```
 
-### 2. Add Frontend Image Preprocessing
+### 3. Update Document Storage with Detected Type
 
-Before sending to the edge function:
-- Resize large images to reduce payload size (max 2048px)
-- Validate image format and size
-- Show progress indicator during analysis
-- Handle specific error codes (429, 402, 400) with helpful messages
+After AI analysis completes:
 
-### 3. Improve Error Handling & Feedback
+- Update the document record in the database with the AI-detected document type
+- This way, even if user selected "auto", the stored document will have the correct type for future reference
 
-- Add more visible loading states during analysis
-- Show specific error messages based on error type
-- Add retry logic for transient failures
+### 4. Enhanced AI Prompt for Better Detection
 
-## Files to Modify
+Improve the AI prompt to:
+- First analyze the document and identify its type (insurance, RC, PUCC, fitness, or other)
+- Then extract ALL visible fields that match vehicle data
+- Provide confidence level for both detection and extraction
+
+## File Changes Summary
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/analyze-document/index.ts` | Fix image format, add validation, improve logging |
-| `src/pages/VehicleDetails.tsx` | Add image preprocessing, better error handling |
+| `supabase/functions/analyze-document/index.ts` | Add "auto" mode, universal field list, improved prompts |
+| `src/pages/VehicleDetails.tsx` | Add "Auto-Detect" option, change default, update document type after analysis |
 
 ## Technical Details
 
 ### Edge Function Changes
 
-1. **Validate image before sending**:
-   - Check base64 is valid
-   - Log image size for debugging
-   - Add timeout handling
+1. **Universal field list for auto-detection:**
+   ```text
+   All fields combined: owner_name, insurance_company, insurance_expiry, 
+   chassis_number, engine_number, registration_date, manufacturer, maker_model, 
+   fuel_type, color, seating_capacity, cubic_capacity, vehicle_class, body_type, 
+   vehicle_category, gross_vehicle_weight, unladen_weight, pucc_valid_upto, 
+   fitness_valid_upto, road_tax_valid_upto, emission_norms
+   ```
 
-2. **Update image format** for Gemini compatibility:
-   - Use inline_data format instead of image_url for base64 images
-   - Format: `{ type: "image", source: { type: "base64", media_type, data } }`
-
-3. **Better error responses**:
-   - Return specific error types (image_too_large, invalid_format, ai_error)
-   - Include debugging information in non-production
+2. **Updated AI system prompt:**
+   - Instruct AI to first identify the document type
+   - Then extract all visible fields regardless of document type
+   - Return both detected type and extracted fields
 
 ### Frontend Changes
 
-1. **Image preprocessing**:
-   - Use canvas to resize images larger than 2048x2048
-   - Compress JPEG quality to reduce payload size
-   - Validate file type before upload
+1. **Default to auto-detect:**
+   - Users can still manually select a type if they prefer
+   - Auto-detect ensures maximum extraction without user effort
 
-2. **Enhanced feedback**:
-   - Show "Analyzing with AI..." prominently during processing
-   - Show step-by-step progress (Uploading → Analyzing → Complete)
-   - Better error messages for different failure types
+2. **Update stored document type:**
+   - After successful analysis, update the `document_type` field in the `documents` table with the AI-detected type
+   - This provides accurate categorization for the document repository
 
-## Implementation Approach
+## User Experience Flow
 
-1. First, update the edge function to fix the image format issue
-2. Redeploy and test with a sample document
-3. Add frontend image preprocessing to handle large images
-4. Improve error handling and user feedback
+1. User clicks "Upload Document" button
+2. Consent dialog appears (existing behavior)
+3. User selects file (document type defaults to "Auto-Detect")
+4. File uploads and AI analysis begins automatically
+5. AI detects document type and extracts all visible fields
+6. Document Analysis Modal shows extracted data with detected type badge
+7. User reviews and selects which fields to apply
+8. Document is saved with AI-detected type in repository
 
-## Expected Outcome
+## Benefits
 
-After implementation:
-- Users will see clear feedback when uploading documents
-- AI extraction will work correctly for supported document types
-- Errors will be shown with helpful messages
-- Large images will be automatically resized before processing
+- No dependency on user correctly tagging documents
+- Maximum data extraction from every upload
+- Cleaner user experience (less decisions needed)
+- Documents still get properly categorized via AI detection
+- Backward compatible (manual tagging still works)
 
