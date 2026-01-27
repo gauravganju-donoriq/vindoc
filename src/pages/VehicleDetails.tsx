@@ -27,6 +27,8 @@ import { useRefreshVehicle } from "@/hooks/useRefreshVehicle";
 import TransferVehicleDialog from "@/components/vehicle/TransferVehicleDialog";
 import VehicleHistory from "@/components/vehicle/VehicleHistory";
 import DocumentAnalysisModal from "@/components/vehicle/DocumentAnalysisModal";
+import UploadConsentDialog from "@/components/vehicle/UploadConsentDialog";
+import VehicleVerificationSection from "@/components/vehicle/VehicleVerificationSection";
 import { logVehicleEvent } from "@/lib/vehicleHistory";
 
 interface Vehicle {
@@ -60,6 +62,9 @@ interface Vehicle {
   gross_vehicle_weight: string | null;
   unladen_weight: string | null;
   data_last_fetched_at: string | null;
+  is_verified: boolean | null;
+  verified_at: string | null;
+  verification_photo_path: string | null;
 }
 
 interface Document {
@@ -118,6 +123,10 @@ const VehicleDetails = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+
+  // Upload consent state
+  const [showUploadConsent, setShowUploadConsent] = useState(false);
+  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
 
   // Refresh vehicle data hook
   const { isRefreshing, canRefresh, getTimeUntilRefresh, refreshVehicleData } = useRefreshVehicle({
@@ -431,7 +440,7 @@ const VehicleDetails = () => {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -453,6 +462,22 @@ const VehicleDetails = () => {
       });
       return;
     }
+
+    // Store the file and show consent dialog
+    setPendingUploadFile(file);
+    setShowUploadConsent(true);
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const processFileUpload = async () => {
+    if (!pendingUploadFile) return;
+
+    const file = pendingUploadFile;
+    setShowUploadConsent(false);
 
     // Start AI analysis for image files (not PDF)
     const isImage = file.type.startsWith("image/");
@@ -510,9 +535,7 @@ const VehicleDetails = () => {
       });
     } finally {
       setUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      setPendingUploadFile(null);
     }
   };
 
@@ -841,6 +864,16 @@ const VehicleDetails = () => {
           </CardContent>
         </Card>
 
+        {/* Vehicle Verification Section */}
+        <VehicleVerificationSection
+          vehicleId={vehicle.id}
+          registrationNumber={vehicle.registration_number}
+          isVerified={vehicle.is_verified}
+          verifiedAt={vehicle.verified_at}
+          verificationPhotoPath={vehicle.verification_photo_path}
+          onVerificationComplete={fetchVehicle}
+        />
+
         {/* Vehicle Identity Section */}
         <SectionCard title="Vehicle Identity" icon={<Car className="h-5 w-5" />}>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1140,7 +1173,7 @@ const VehicleDetails = () => {
                 <input
                   type="file"
                   ref={fileInputRef}
-                  onChange={handleFileUpload}
+                  onChange={handleFileSelect}
                   accept=".pdf,.jpg,.jpeg,.png,.webp"
                   className="hidden"
                 />
@@ -1235,6 +1268,18 @@ const VehicleDetails = () => {
           onApply={handleApplyExtractedFields}
         />
       )}
+
+      {/* Upload Consent Dialog */}
+      <UploadConsentDialog
+        open={showUploadConsent}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingUploadFile(null);
+          }
+          setShowUploadConsent(open);
+        }}
+        onConfirm={processFileUpload}
+      />
     </div>
   );
 };
