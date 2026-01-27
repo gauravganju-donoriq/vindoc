@@ -30,7 +30,9 @@ import DocumentAnalysisModal from "@/components/vehicle/DocumentAnalysisModal";
 import UploadConsentDialog from "@/components/vehicle/UploadConsentDialog";
 import VehicleVerificationSection from "@/components/vehicle/VehicleVerificationSection";
 import VehicleProfileImage from "@/components/vehicle/VehicleProfileImage";
+import VerificationProgress from "@/components/vehicle/VerificationProgress";
 import { logVehicleEvent } from "@/lib/vehicleHistory";
+import { calculateVerificationProgress } from "@/lib/verificationChecks";
 
 interface Vehicle {
   id: string;
@@ -890,7 +892,12 @@ const VehicleDetails = () => {
           </CardContent>
         </Card>
 
-        {/* Vehicle Verification Section */}
+        {/* Verification Progress Section */}
+        <VerificationProgress 
+          progress={calculateVerificationProgress(vehicle, documents)} 
+        />
+
+        {/* Photo Verification Section */}
         <VehicleVerificationSection
           vehicleId={vehicle.id}
           registrationNumber={vehicle.registration_number}
