@@ -17,7 +17,9 @@ export type VehicleEventType =
   | "verification_failed"
   | "service_added"
   | "service_updated"
-  | "service_deleted";
+  | "service_deleted"
+  | "service_reminder"
+  | "expiry_alert";
 
 interface LogEventParams {
   vehicleId: string;
@@ -74,6 +76,8 @@ export function getEventIcon(eventType: VehicleEventType): string {
     service_added: "🔧",
     service_updated: "🔧",
     service_deleted: "🗑️",
+    service_reminder: "🔔",
+    expiry_alert: "📬",
   };
   return icons[eventType] || "📝";
 }
@@ -97,6 +101,8 @@ export function getEventColor(eventType: VehicleEventType): string {
     service_added: "text-green-600",
     service_updated: "text-blue-600",
     service_deleted: "text-red-600",
+    service_reminder: "text-amber-600",
+    expiry_alert: "text-amber-600",
   };
   return colors[eventType] || "text-foreground";
 }
