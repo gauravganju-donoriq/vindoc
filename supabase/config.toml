@@ -1,1 +1,4 @@
 project_id = "zdvppjgxjyqqwrekougp"
+
+[functions.fetch-vehicle-details]
+verify_jwt = false
