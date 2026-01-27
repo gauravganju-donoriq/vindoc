@@ -458,13 +458,77 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case "claims": {
+        // Get all ownership claims
+        const { data: claimsData } = await adminClient
+          .from("ownership_claims")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        const enrichedClaims = await Promise.all(
+          (claimsData || []).map(async (c) => {
+            const { data: claimantData } = await adminClient.auth.admin.getUserById(c.claimant_id);
+            const { data: ownerData } = await adminClient.auth.admin.getUserById(c.current_owner_id);
+            const { data: vehicleData } = await adminClient
+              .from("vehicles")
+              .select("maker_model")
+              .eq("id", c.vehicle_id)
+              .maybeSingle();
+
+            return {
+              ...c,
+              claimantEmail: claimantData?.user?.email || c.claimant_email,
+              ownerEmail: ownerData?.user?.email || "Unknown",
+              makerModel: vehicleData?.maker_model || null,
+            };
+          })
+        );
+
+        responseData = { claims: enrichedClaims };
+        break;
+      }
+
+      case "update_claim_status": {
+        const claimId = body?.claimId as string;
+        const newStatus = body?.status as string;
+
+        if (!claimId || !newStatus) {
+          return new Response(
+            JSON.stringify({ error: "claimId and status are required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (!["resolved", "rejected", "expired"].includes(newStatus)) {
+          return new Response(
+            JSON.stringify({ error: "Invalid status value" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const { error: updateError } = await adminClient
+          .from("ownership_claims")
+          .update({ status: newStatus })
+          .eq("id", claimId);
+
+        if (updateError) {
+          console.error("Claim update error:", updateError);
+          return new Response(
+            JSON.stringify({ error: "Failed to update claim status" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        responseData = { success: true, message: `Claim marked as ${newStatus}` };
+        break;
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: "Invalid type parameter" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
     }
-
     return new Response(
       JSON.stringify(responseData),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
