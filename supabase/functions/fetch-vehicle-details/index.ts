@@ -46,40 +46,47 @@ serve(async (req) => {
       body: JSON.stringify({ vehicle_number: registrationNumber }),
     });
 
-    const data = await response.json();
     console.log("API Response status:", response.status);
 
-    if (!response.ok || !data) {
-      console.error("API Error:", data);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("API Error:", errorText);
       return new Response(
         JSON.stringify({ success: false, message: "Could not fetch vehicle details" }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Parse the API response and extract relevant fields
-    // The exact field names may vary based on the API response structure
-    const result = data.result || data.data || data;
-    
+    const data = await response.json();
+    console.log("API Response data:", JSON.stringify(data));
+
+    if (!data) {
+      return new Response(
+        JSON.stringify({ success: false, message: "No data returned from API" }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Map the API response to our database fields
     const vehicleData = {
-      owner_name: result.owner_name || result.ownerName || result.owner || null,
-      vehicle_class: result.vehicle_class || result.vehicleClass || result.class || null,
-      fuel_type: result.fuel_type || result.fuelType || result.fuel || null,
-      maker_model: result.maker_model || result.makerModel || result.model || result.vehicleModel || null,
-      manufacturer: result.manufacturer || result.maker || result.vehicleMaker || null,
-      registration_date: parseDate(result.registration_date || result.registrationDate || result.regDate),
-      insurance_company: result.insurance_company || result.insuranceCompany || result.insurer || null,
-      insurance_expiry: parseDate(result.insurance_upto || result.insuranceUpto || result.insuranceExpiry),
-      pucc_valid_upto: parseDate(result.pucc_upto || result.puccUpto || result.puccValidUpto),
-      fitness_valid_upto: parseDate(result.fitness_upto || result.fitnessUpto || result.fitnessValidUpto),
-      road_tax_valid_upto: parseDate(result.tax_upto || result.taxUpto || result.roadTaxValidUpto),
-      rc_status: result.rc_status || result.rcStatus || result.status || null,
+      owner_name: data.owner_name || null,
+      vehicle_class: data.class || null,
+      fuel_type: data.fuel_type || null,
+      maker_model: data.brand_model || null,
+      manufacturer: data.brand_name || null,
+      registration_date: parseIndianDate(data.registration_date),
+      insurance_company: data.insurance_company || null,
+      insurance_expiry: parseIndianDate(data.insurance_expiry),
+      pucc_valid_upto: parseIndianDate(data.pucc_upto),
+      fitness_valid_upto: null, // Not in this API response
+      road_tax_valid_upto: parseIndianDate(data.tax_paid_upto || data.tax_upto),
+      rc_status: data.rc_status || null,
     };
 
     console.log("Parsed vehicle data:", vehicleData);
 
     return new Response(
-      JSON.stringify({ success: true, vehicleData, rawData: result }),
+      JSON.stringify({ success: true, vehicleData, rawData: data }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
@@ -92,39 +99,28 @@ serve(async (req) => {
   }
 });
 
-// Helper function to parse various date formats
-function parseDate(dateValue: string | null | undefined): string | null {
-  if (!dateValue) return null;
+// Parse Indian date format like "24-Nov-2017" or "23-Feb-2024" to YYYY-MM-DD
+function parseIndianDate(dateValue: string | null | undefined): string | null {
+  if (!dateValue || dateValue === "NA" || dateValue === "null") return null;
   
   try {
-    // Handle DD-MM-YYYY format
-    if (dateValue.includes('-')) {
-      const parts = dateValue.split('-');
-      if (parts.length === 3) {
-        const [day, month, year] = parts;
-        if (day.length === 2 && month.length === 2 && year.length === 4) {
-          return `${year}-${month}-${day}`;
-        }
-        // Already in YYYY-MM-DD format
-        if (parts[0].length === 4) {
-          return dateValue;
-        }
-      }
-    }
+    const months: { [key: string]: string } = {
+      'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+      'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+      'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+    };
     
-    // Handle DD/MM/YYYY format
-    if (dateValue.includes('/')) {
-      const parts = dateValue.split('/');
-      if (parts.length === 3) {
-        const [day, month, year] = parts;
-        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    // Handle "DD-Mon-YYYY" format (e.g., "24-Nov-2017")
+    const parts = dateValue.split('-');
+    if (parts.length === 3) {
+      const day = parts[0].padStart(2, '0');
+      const monthStr = parts[1];
+      const year = parts[2];
+      
+      const month = months[monthStr];
+      if (month && year.length === 4) {
+        return `${year}-${month}-${day}`;
       }
-    }
-    
-    // Try parsing as ISO date
-    const date = new Date(dateValue);
-    if (!isNaN(date.getTime())) {
-      return date.toISOString().split('T')[0];
     }
     
     return null;
