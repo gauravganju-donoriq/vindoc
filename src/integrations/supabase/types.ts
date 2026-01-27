@@ -146,6 +146,68 @@ export type Database = {
           },
         ]
       }
+      service_records: {
+        Row: {
+          cost: number | null
+          created_at: string
+          description: string | null
+          id: string
+          next_service_due_date: string | null
+          next_service_due_km: number | null
+          notes: string | null
+          odometer_reading: number | null
+          receipt_path: string | null
+          service_center: string | null
+          service_date: string
+          service_type: string
+          updated_at: string
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          cost?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          next_service_due_date?: string | null
+          next_service_due_km?: number | null
+          notes?: string | null
+          odometer_reading?: number | null
+          receipt_path?: string | null
+          service_center?: string | null
+          service_date: string
+          service_type: string
+          updated_at?: string
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          cost?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          next_service_due_date?: string | null
+          next_service_due_km?: number | null
+          notes?: string | null
+          odometer_reading?: number | null
+          receipt_path?: string | null
+          service_center?: string | null
+          service_date?: string
+          service_type?: string
+          updated_at?: string
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_records_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null

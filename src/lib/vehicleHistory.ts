@@ -14,7 +14,10 @@ export type VehicleEventType =
   | "details_updated"
   | "ai_extraction"
   | "vehicle_verified"
-  | "verification_failed";
+  | "verification_failed"
+  | "service_added"
+  | "service_updated"
+  | "service_deleted";
 
 interface LogEventParams {
   vehicleId: string;
@@ -68,6 +71,9 @@ export function getEventIcon(eventType: VehicleEventType): string {
     ai_extraction: "🤖",
     vehicle_verified: "✅",
     verification_failed: "⚠️",
+    service_added: "🔧",
+    service_updated: "🔧",
+    service_deleted: "🗑️",
   };
   return icons[eventType] || "📝";
 }
@@ -88,6 +94,9 @@ export function getEventColor(eventType: VehicleEventType): string {
     ai_extraction: "text-purple-600",
     vehicle_verified: "text-green-600",
     verification_failed: "text-amber-600",
+    service_added: "text-green-600",
+    service_updated: "text-blue-600",
+    service_deleted: "text-red-600",
   };
   return colors[eventType] || "text-foreground";
 }
