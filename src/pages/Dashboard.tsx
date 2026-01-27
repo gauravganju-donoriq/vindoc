@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { Car, Plus, LogOut, AlertTriangle, CheckCircle, Clock, Trash2, ShieldCheck, ShieldX } from "lucide-react";
 import { format, differenceInDays, isPast } from "date-fns";
@@ -31,6 +32,7 @@ interface Vehicle {
   fitness_valid_upto: string | null;
   road_tax_valid_upto: string | null;
   is_verified: boolean | null;
+  verified_at: string | null;
 }
 
 const getExpiryStatus = (expiryDate: string | null) => {
@@ -225,10 +227,19 @@ const Dashboard = () => {
                       </div>
                       <div className="flex flex-col gap-1 items-end">
                         {vehicle.is_verified ? (
-                          <Badge className="flex items-center gap-1 bg-primary text-primary-foreground">
-                            <ShieldCheck className="h-3 w-3" />
-                            Verified
-                          </Badge>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge className="flex items-center gap-1 bg-primary text-primary-foreground cursor-help">
+                                  <ShieldCheck className="h-3 w-3" />
+                                  Verified
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Verified on {vehicle.verified_at ? format(new Date(vehicle.verified_at), "dd MMM yyyy 'at' h:mm a") : "N/A"}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         ) : (
                           <Badge variant="outline" className="flex items-center gap-1 text-muted-foreground">
                             <ShieldX className="h-3 w-3" />
