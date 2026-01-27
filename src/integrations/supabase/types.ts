@@ -55,6 +55,53 @@ export type Database = {
           },
         ]
       }
+      vehicle_transfers: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          recipient_email: string
+          recipient_id: string | null
+          recipient_phone: string | null
+          sender_id: string
+          status: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          recipient_email: string
+          recipient_id?: string | null
+          recipient_phone?: string | null
+          sender_id: string
+          status?: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          recipient_email?: string
+          recipient_id?: string | null
+          recipient_phone?: string | null
+          sender_id?: string
+          status?: string
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_transfers_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicles: {
         Row: {
           body_type: string | null

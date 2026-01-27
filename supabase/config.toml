@@ -2,3 +2,6 @@ project_id = "zdvppjgxjyqqwrekougp"
 
 [functions.fetch-vehicle-details]
 verify_jwt = false
+
+[functions.send-transfer-notification]
+verify_jwt = false
