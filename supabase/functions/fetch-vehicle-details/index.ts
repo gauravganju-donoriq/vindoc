@@ -37,19 +37,20 @@ serve(async (req) => {
     console.log(`Fetching vehicle details for: ${registrationNumber}`);
     console.log(`API Key configured, length: ${rapidApiKey.length}`);
 
-    const requestBody = JSON.stringify({ vehicle_number: registrationNumber });
+    // Match exactly the Python working implementation
+    const payload = `{"vehicle_number":"${registrationNumber}"}`;
     
     console.log('Making request to RapidAPI...');
-    console.log('Request body:', requestBody);
+    console.log('Payload:', payload);
     
     const response = await fetch('https://vehicle-rc-information-v2.p.rapidapi.com/', {
       method: 'POST',
-      headers: {
+      headers: new Headers({
         'x-rapidapi-key': rapidApiKey,
         'x-rapidapi-host': 'vehicle-rc-information-v2.p.rapidapi.com',
         'Content-Type': 'application/json'
-      },
-      body: requestBody,
+      }),
+      body: payload,
     });
 
     console.log("Response status:", response.status);
