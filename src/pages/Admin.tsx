@@ -7,7 +7,8 @@ import { AdminUsers } from "@/components/admin/AdminUsers";
 import { AdminActivity } from "@/components/admin/AdminActivity";
 import { AdminVehicles } from "@/components/admin/AdminVehicles";
 import { AdminTransfers } from "@/components/admin/AdminTransfers";
-import { Shield, ArrowLeft, LayoutDashboard, Users, Activity, Car, ArrowRightLeft } from "lucide-react";
+import { AdminClaims } from "@/components/admin/AdminClaims";
+import { Shield, ArrowLeft, LayoutDashboard, Users, Activity, Car, ArrowRightLeft, FileWarning } from "lucide-react";
 
 const Admin = () => {
   const { isAdmin, isLoading } = useAdminCheck(true);
@@ -43,7 +44,7 @@ const Admin = () => {
 
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-[600px]">
+          <TabsList className="grid w-full grid-cols-6 lg:w-[750px]">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <LayoutDashboard className="h-4 w-4" />
               <span className="hidden sm:inline">Overview</span>
@@ -59,6 +60,10 @@ const Admin = () => {
             <TabsTrigger value="transfers" className="flex items-center gap-2">
               <ArrowRightLeft className="h-4 w-4" />
               <span className="hidden sm:inline">Transfers</span>
+            </TabsTrigger>
+            <TabsTrigger value="claims" className="flex items-center gap-2">
+              <FileWarning className="h-4 w-4" />
+              <span className="hidden sm:inline">Claims</span>
             </TabsTrigger>
             <TabsTrigger value="activity" className="flex items-center gap-2">
               <Activity className="h-4 w-4" />
@@ -80,6 +85,10 @@ const Admin = () => {
 
           <TabsContent value="transfers">
             <AdminTransfers />
+          </TabsContent>
+
+          <TabsContent value="claims">
+            <AdminClaims />
           </TabsContent>
 
           <TabsContent value="activity">
