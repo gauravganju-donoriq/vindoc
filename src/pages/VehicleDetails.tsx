@@ -26,6 +26,7 @@ import SectionCard from "@/components/vehicle/SectionCard";
 import { useRefreshVehicle } from "@/hooks/useRefreshVehicle";
 import TransferVehicleDialog from "@/components/vehicle/TransferVehicleDialog";
 import VehicleHistory from "@/components/vehicle/VehicleHistory";
+import ServiceHistory from "@/components/vehicle/ServiceHistory";
 import DocumentAnalysisModal from "@/components/vehicle/DocumentAnalysisModal";
 import UploadConsentDialog from "@/components/vehicle/UploadConsentDialog";
 import VehicleVerificationSection from "@/components/vehicle/VehicleVerificationSection";
@@ -1284,6 +1285,9 @@ const VehicleDetails = () => {
             </div>
           )}
         </SectionCard>
+
+        {/* Service History */}
+        <ServiceHistory vehicleId={vehicle.id} registrationNumber={vehicle.registration_number} />
 
         {/* Vehicle History Log */}
         <VehicleHistory vehicleId={vehicle.id} />
