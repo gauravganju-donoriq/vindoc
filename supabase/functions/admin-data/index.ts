@@ -74,9 +74,14 @@ Deno.serve(async (req) => {
       console.log(`Assigned super_admin role to ${userEmail}`);
     }
 
-    // Parse query parameters
-    const url = new URL(req.url);
-    const dataType = url.searchParams.get("type") || "overview";
+    // Parse request body for type parameter
+    let dataType = "overview";
+    try {
+      const body = await req.json();
+      dataType = body?.type || "overview";
+    } catch {
+      // If no body or invalid JSON, use default
+    }
 
     let responseData: Record<string, unknown> = {};
 

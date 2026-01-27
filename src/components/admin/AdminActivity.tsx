@@ -26,8 +26,8 @@ export function AdminActivity() {
     const fetchActivity = async () => {
       try {
         const { data, error: fnError } = await supabase.functions.invoke(
-          "admin-data?type=activity",
-          { method: "GET" }
+          "admin-data",
+          { body: { type: "activity" } }
         );
 
         if (fnError) throw fnError;
