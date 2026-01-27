@@ -82,6 +82,7 @@ interface AnalysisResult {
 }
 
 const documentTypes = [
+  { value: "auto", label: "Auto-Detect (Recommended)" },
   { value: "insurance", label: "Insurance Policy" },
   { value: "rc", label: "Registration Certificate (RC)" },
   { value: "pucc", label: "PUCC Certificate" },
@@ -109,7 +110,7 @@ const VehicleDetails = () => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [selectedDocType, setSelectedDocType] = useState("insurance");
+  const [selectedDocType, setSelectedDocType] = useState("auto");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -127,6 +128,7 @@ const VehicleDetails = () => {
   // Upload consent state
   const [showUploadConsent, setShowUploadConsent] = useState(false);
   const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
+  const [lastUploadedDocId, setLastUploadedDocId] = useState<string | null>(null);
 
   // Refresh vehicle data hook
   const { isRefreshing, canRefresh, getTimeUntilRefresh, refreshVehicleData } = useRefreshVehicle({
@@ -409,6 +411,17 @@ const VehicleDetails = () => {
 
       if (error) throw error;
 
+      // Update document type if we have a pending document and AI detected the type
+      if (lastUploadedDocId && analysisResult?.documentType && analysisResult.documentType !== "auto") {
+        await supabase
+          .from("documents")
+          .update({ document_type: analysisResult.documentType })
+          .eq("id", lastUploadedDocId);
+        
+        setLastUploadedDocId(null);
+        fetchDocuments(); // Refresh to show updated document type
+      }
+
       // Log the event
       const changedFields = Object.keys(selectedFields);
       await logVehicleEvent({
@@ -418,7 +431,8 @@ const VehicleDetails = () => {
         metadata: { 
           changedFields, 
           extractedValues: selectedFields,
-          confidence: analysisResult?.confidence 
+          confidence: analysisResult?.confidence,
+          detectedDocumentType: analysisResult?.documentType
         },
       });
 
@@ -503,16 +517,21 @@ const VehicleDetails = () => {
 
       if (uploadError) throw uploadError;
 
-      const { error: dbError } = await supabase.from("documents").insert({
+      const { data: insertedDoc, error: dbError } = await supabase.from("documents").insert({
         vehicle_id: id,
         user_id: user.id,
-        document_type: selectedDocType,
+        document_type: selectedDocType === "auto" ? "other" : selectedDocType, // Store as "other" until AI detects type
         document_name: file.name,
         file_path: filePath,
         file_size: file.size,
-      });
+      }).select("id").single();
 
       if (dbError) throw dbError;
+
+      // Store the document ID for updating after AI detection
+      if (insertedDoc && selectedDocType === "auto") {
+        setLastUploadedDocId(insertedDoc.id);
+      }
 
       await logVehicleEvent({
         vehicleId: id!,
