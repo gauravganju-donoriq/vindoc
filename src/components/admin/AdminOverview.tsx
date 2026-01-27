@@ -22,15 +22,11 @@ export function AdminOverview() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
 
-        const response = await supabase.functions.invoke("admin-data", {
-          body: null,
-          headers: {},
-        });
-
-        // Append query params via method parameter
         const { data: overviewData, error: fnError } = await supabase.functions.invoke(
-          "admin-data?type=overview",
-          { method: "GET" }
+          "admin-data",
+          { 
+            body: { type: "overview" },
+          }
         );
 
         if (fnError) throw fnError;

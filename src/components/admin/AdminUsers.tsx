@@ -21,8 +21,8 @@ export function AdminUsers() {
     const fetchUsers = async () => {
       try {
         const { data, error: fnError } = await supabase.functions.invoke(
-          "admin-data?type=users",
-          { method: "GET" }
+          "admin-data",
+          { body: { type: "users" } }
         );
 
         if (fnError) throw fnError;
