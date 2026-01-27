@@ -144,6 +144,8 @@ const AddVehicle = () => {
         financer: fetchedData?.financer || null,
         noc_details: fetchedData?.noc_details || null,
         raw_api_data: fetchedData ? JSON.stringify(fetchedData) : null,
+        // Set data_last_fetched_at only when fetched from API
+        data_last_fetched_at: fetchedData ? new Date().toISOString() : null,
       };
 
       const { error } = await supabase.from("vehicles").insert(vehicleData);
@@ -151,8 +153,8 @@ const AddVehicle = () => {
       if (error) {
         if (error.code === "23505") {
           toast({
-            title: "Vehicle already exists",
-            description: "This registration number is already in your account.",
+            title: "Vehicle already registered",
+            description: "This vehicle is already registered in the system by another user.",
             variant: "destructive",
           });
           return;

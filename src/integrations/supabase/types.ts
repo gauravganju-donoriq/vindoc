@@ -62,6 +62,7 @@ export type Database = {
           color: string | null
           created_at: string
           cubic_capacity: number | null
+          data_last_fetched_at: string | null
           emission_norms: string | null
           engine_number: string | null
           financer: string | null
@@ -97,6 +98,7 @@ export type Database = {
           color?: string | null
           created_at?: string
           cubic_capacity?: number | null
+          data_last_fetched_at?: string | null
           emission_norms?: string | null
           engine_number?: string | null
           financer?: string | null
@@ -132,6 +134,7 @@ export type Database = {
           color?: string | null
           created_at?: string
           cubic_capacity?: number | null
+          data_last_fetched_at?: string | null
           emission_norms?: string | null
           engine_number?: string | null
           financer?: string | null

@@ -10,9 +10,9 @@ import {
   ArrowLeft, Upload, FileText, Trash2, Download, 
   AlertTriangle, CheckCircle, Clock, Car, Calendar, Shield,
   Settings, User, Fuel, Palette, Users, Banknote, Hash,
-  Gauge, Weight, FileCheck
+  Gauge, Weight, FileCheck, RefreshCw, Loader2
 } from "lucide-react";
-import { format, differenceInDays, isPast } from "date-fns";
+import { format, differenceInDays, isPast, formatDistanceToNow } from "date-fns";
 import {
   Select,
   SelectContent,
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import DetailItem from "@/components/vehicle/DetailItem";
 import SectionCard from "@/components/vehicle/SectionCard";
+import { useRefreshVehicle } from "@/hooks/useRefreshVehicle";
 
 interface Vehicle {
   id: string;
@@ -54,6 +55,7 @@ interface Vehicle {
   wheelbase: string | null;
   gross_vehicle_weight: string | null;
   unladen_weight: string | null;
+  data_last_fetched_at: string | null;
 }
 
 interface Document {
@@ -286,6 +288,15 @@ const VehicleDetails = () => {
     { label: "Road Tax", date: vehicle.road_tax_valid_upto },
   ];
 
+  const { isRefreshing, canRefresh, getTimeUntilRefresh, refreshVehicleData } = useRefreshVehicle({
+    vehicleId: vehicle.id,
+    registrationNumber: vehicle.registration_number,
+    dataLastFetchedAt: vehicle.data_last_fetched_at,
+    onSuccess: fetchVehicle,
+  });
+
+  const timeUntilRefresh = getTimeUntilRefresh();
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
@@ -324,6 +335,37 @@ const VehicleDetails = () => {
                     {!vehicle.manufacturer && !vehicle.maker_model && "Vehicle Details"}
                   </CardDescription>
                 </div>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <Button
+                  variant={canRefresh ? "default" : "outline"}
+                  size="sm"
+                  onClick={refreshVehicleData}
+                  disabled={!canRefresh || isRefreshing}
+                >
+                  {isRefreshing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Refreshing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Refresh Data
+                    </>
+                  )}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {vehicle.data_last_fetched_at ? (
+                    timeUntilRefresh ? (
+                      `Can refresh in ${timeUntilRefresh.hours}h ${timeUntilRefresh.minutes}m`
+                    ) : (
+                      `Last updated ${formatDistanceToNow(new Date(vehicle.data_last_fetched_at), { addSuffix: true })}`
+                    )
+                  ) : (
+                    "Never fetched – Refresh now"
+                  )}
+                </span>
               </div>
             </div>
           </CardHeader>
