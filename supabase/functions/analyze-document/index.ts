@@ -33,7 +33,22 @@ serve(async (req) => {
 
     if (!documentBase64) {
       return new Response(
-        JSON.stringify({ error: "No document provided" }),
+        JSON.stringify({ error: "No document provided", success: false }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate base64 and log size for debugging
+    const base64Size = Math.round((documentBase64.length * 3) / 4 / 1024);
+    console.log(`Processing image: ~${base64Size}KB, type: ${mimeType || "unknown"}`);
+
+    if (base64Size > 4096) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Image too large. Please upload an image smaller than 4MB.", 
+          errorType: "image_too_large",
+          success: false 
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -66,15 +81,12 @@ Vehicle Registration Number for reference: ${vehicleContext?.registration_number
 
 Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
 
-    // Prepare the image content
-    const imageContent = {
-      type: "image_url",
-      image_url: {
-        url: `data:${mimeType || "image/jpeg"};base64,${documentBase64}`
-      }
-    };
+    // Determine the correct media type
+    const mediaType = mimeType || "image/jpeg";
 
-    // Call Lovable AI with vision capabilities
+    console.log(`Sending request to AI gateway with model google/gemini-2.5-flash`);
+
+    // Call Lovable AI with vision capabilities using the correct format
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -82,14 +94,19 @@ Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           { 
             role: "user", 
             content: [
               { type: "text", text: userPrompt },
-              imageContent
+              { 
+                type: "image_url", 
+                image_url: { 
+                  url: `data:${mediaType};base64,${documentBase64}` 
+                } 
+              }
             ]
           }
         ],
@@ -149,29 +166,58 @@ Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error("AI gateway error:", response.status, errorText);
+      
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+          JSON.stringify({ 
+            error: "Rate limit exceeded. Please try again in a few moments.", 
+            errorType: "rate_limit",
+            success: false 
+          }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: "AI service payment required." }),
+          JSON.stringify({ 
+            error: "AI service payment required. Please contact support.", 
+            errorType: "payment_required",
+            success: false 
+          }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI analysis failed: ${response.status}`);
+      
+      // Parse error to give more specific message
+      let errorMessage = "AI analysis failed. Please try again.";
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson?.error?.message?.includes("Unable to process")) {
+          errorMessage = "Could not process the image. Please ensure it's a clear, readable document photo.";
+        }
+      } catch {
+        // Use default error message
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          error: errorMessage, 
+          errorType: "ai_error",
+          success: false 
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const aiResponse = await response.json();
-    console.log("AI Response:", JSON.stringify(aiResponse, null, 2));
+    console.log("AI Response received successfully");
 
     // Extract the tool call result
     const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall || toolCall.function.name !== "extract_document_fields") {
+      console.error("Unexpected AI response structure:", JSON.stringify(aiResponse, null, 2));
       throw new Error("AI did not return expected extraction results");
     }
 
@@ -186,6 +232,8 @@ Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
         filteredFields[field] = extractedData.extracted_fields[field];
       }
     }
+
+    console.log(`Extracted ${Object.keys(filteredFields).length} fields with ${extractedData.confidence} confidence`);
 
     return new Response(
       JSON.stringify({
@@ -202,6 +250,7 @@ Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
     return new Response(
       JSON.stringify({ 
         error: error instanceof Error ? error.message : "Failed to analyze document",
+        errorType: "unknown",
         success: false 
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
