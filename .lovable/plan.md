@@ -1,199 +1,101 @@
 
-# Editable Fields + AI Document Scanner
 
-## Overview
+# Fix AI Document Scanner
 
-This plan implements two complementary features:
-1. **Editable Vehicle Fields** - Allow users to manually fill in missing data that the API didn't provide
-2. **AI Document Scanner** - Use Gemini's vision capabilities to automatically extract data from uploaded documents and offer to populate empty fields
+## Problem Identified
 
-## How It Works
+After uploading a document, the AI extraction fails silently. Investigation revealed:
 
-### Feature 1: Editable Fields
+1. **AI Gateway Error**: Google Gemini returns `"Unable to process input image"` (400 error)
+2. **Image Format Issue**: The current image format in the API request is not being processed correctly by the Gemini model
+3. **Possible Request Size Issue**: Large base64 images may be causing timeout or size issues
 
-Users can click an "Edit" button on the Vehicle Details page to enter edit mode. In this mode, empty fields become editable input fields. Changes are saved to the database and logged in vehicle history.
+## Root Cause
 
-**Editable fields include:**
-- Vehicle Identity: Manufacturer, Model, Vehicle Class, Category, Body Type, Color, Registration Date
-- Technical Specs: Engine Number, Chassis Number, Cubic Capacity, Seating Capacity, Emission Norms, Wheelbase, Gross/Unladen Weight
-- Ownership: Owner Name, Owner Count, Finance Status, Financer, NOC Details
-- Document Dates: Insurance Expiry (+ Company), PUCC Expiry, Fitness Expiry, Road Tax Expiry
+The edge function formats the image as:
+```javascript
+{
+  type: "image_url",
+  image_url: {
+    url: `data:${mimeType};base64,${documentBase64}`
+  }
+}
+```
 
-### Feature 2: AI Document Scanner
+This format may not be fully compatible with how the Lovable AI gateway expects images for Gemini vision models.
 
-When a user uploads a document (insurance policy, RC, PUCC certificate), the system:
-1. Sends the document image/PDF to Gemini Pro Vision via Lovable AI
-2. Extracts relevant fields based on document type
-3. Shows a preview modal with extracted data alongside current values
-4. Allows users to accept/reject each extracted field
+## Solution
 
-**Document type to field mapping:**
-- **Insurance Policy** - insurance_company, insurance_expiry, owner_name, registration_number
-- **RC (Registration Certificate)** - owner_name, chassis_number, engine_number, registration_date, manufacturer, maker_model, fuel_type, color, seating_capacity
-- **PUCC Certificate** - pucc_valid_upto
-- **Fitness Certificate** - fitness_valid_upto
+### 1. Update Edge Function Image Handling
 
-## User Experience Flow
+Modify the `analyze-document` edge function to:
+- Use the correct image format for Gemini via the Lovable AI gateway
+- Add image validation (size, format checks)
+- Add better error logging and handling
+- Return more informative error messages to the frontend
 
-### Editing Fields
-1. User visits Vehicle Details page
-2. Clicks "Edit Details" button in header
-3. Empty fields become editable inputs; filled fields show current value
-4. User fills in missing data
-5. Clicks "Save Changes" to persist
-6. Action logged to vehicle history
+### 2. Add Frontend Image Preprocessing
 
-### AI Document Scan
-1. User selects document type and uploads a file
-2. Loading spinner shows "Analyzing document with AI..."
-3. Modal appears showing:
-   - Left side: Extracted values from document
-   - Right side: Current database values
-   - Checkboxes to select which fields to update
-4. User reviews and clicks "Apply Selected" or "Cancel"
-5. Selected fields are updated and changes logged
+Before sending to the edge function:
+- Resize large images to reduce payload size (max 2048px)
+- Validate image format and size
+- Show progress indicator during analysis
+- Handle specific error codes (429, 402, 400) with helpful messages
 
-## Implementation Steps
+### 3. Improve Error Handling & Feedback
 
-### Phase 1: Database & Backend
+- Add more visible loading states during analysis
+- Show specific error messages based on error type
+- Add retry logic for transient failures
 
-**1.1 Edge Function: `analyze-document`**
-- Accepts: document file (base64), document type, vehicle context
-- Uses Lovable AI with google/gemini-2.5-pro (vision-capable model)
-- Returns: extracted fields as structured JSON
+## Files to Modify
 
-### Phase 2: Frontend Components
-
-**2.1 Editable Detail Item Component**
-Create `EditableDetailItem.tsx`:
-- Props: label, value, fieldName, isEditing, onChange, inputType
-- Shows value when not editing
-- Shows input field when editing
-
-**2.2 Document Analysis Modal**
-Create `DocumentAnalysisModal.tsx`:
-- Shows side-by-side comparison of extracted vs current values
-- Checkboxes for each field
-- "Apply Selected" button
-
-**2.3 Update VehicleDetails.tsx**
-- Add edit mode state
-- Replace DetailItem with EditableDetailItem in relevant sections
-- Add "Edit Details" button
-- Add save functionality
-- Integrate AI analysis after document upload
+| File | Changes |
+|------|---------|
+| `supabase/functions/analyze-document/index.ts` | Fix image format, add validation, improve logging |
+| `src/pages/VehicleDetails.tsx` | Add image preprocessing, better error handling |
 
 ## Technical Details
 
-### Edge Function: analyze-document
+### Edge Function Changes
 
-```text
-Input:
-{
-  documentBase64: string,
-  documentType: "insurance" | "rc" | "pucc" | "fitness" | "other",
-  vehicleContext: {
-    registration_number: string,
-    current_values: { ... }
-  }
-}
+1. **Validate image before sending**:
+   - Check base64 is valid
+   - Log image size for debugging
+   - Add timeout handling
 
-Output:
-{
-  success: true,
-  extractedFields: {
-    owner_name?: string,
-    insurance_expiry?: string,
-    insurance_company?: string,
-    // ... other fields based on doc type
-  },
-  confidence: "high" | "medium" | "low",
-  rawText?: string // Optional debug info
-}
-```
+2. **Update image format** for Gemini compatibility:
+   - Use inline_data format instead of image_url for base64 images
+   - Format: `{ type: "image", source: { type: "base64", media_type, data } }`
 
-### AI Prompt Structure
+3. **Better error responses**:
+   - Return specific error types (image_too_large, invalid_format, ai_error)
+   - Include debugging information in non-production
 
-The AI will receive:
-- Document image (as base64)
-- Document type context
-- List of fields to extract based on document type
-- Current vehicle registration for verification
+### Frontend Changes
 
-And will use tool calling to return structured data:
-```text
-{
-  extracted_fields: {
-    field_name: {
-      value: string,
-      confidence: number,
-      source_location: string // "top-right", "table row 3", etc.
-    }
-  }
-}
-```
+1. **Image preprocessing**:
+   - Use canvas to resize images larger than 2048x2048
+   - Compress JPEG quality to reduce payload size
+   - Validate file type before upload
 
-### Field Extraction by Document Type
+2. **Enhanced feedback**:
+   - Show "Analyzing with AI..." prominently during processing
+   - Show step-by-step progress (Uploading → Analyzing → Complete)
+   - Better error messages for different failure types
 
-| Document Type | Fields to Extract |
-|---------------|------------------|
-| Insurance | insurance_company, insurance_expiry, owner_name, policy_number (for reference) |
-| RC | owner_name, chassis_number, engine_number, registration_date, manufacturer, maker_model, fuel_type, color, seating_capacity, cubic_capacity, vehicle_class, body_type |
-| PUCC | pucc_valid_upto, emission_norms |
-| Fitness | fitness_valid_upto |
+## Implementation Approach
 
-### Component Structure
+1. First, update the edge function to fix the image format issue
+2. Redeploy and test with a sample document
+3. Add frontend image preprocessing to handle large images
+4. Improve error handling and user feedback
 
-```text
-VehicleDetails.tsx
-├── isEditing state
-├── pendingChanges state
-├── analysisResult state
-│
-├── Header
-│   ├── "Edit Details" button (toggles edit mode)
-│   └── "Save Changes" button (when editing)
-│
-├── SectionCard (Vehicle Identity)
-│   └── EditableDetailItem (for each field)
-│
-├── SectionCard (Technical Specs)
-│   └── EditableDetailItem (for each field)
-│
-├── Document Repository
-│   ├── Upload triggers AI analysis
-│   └── DocumentAnalysisModal (shows when analysis complete)
-```
+## Expected Outcome
 
-## Files to Create/Modify
+After implementation:
+- Users will see clear feedback when uploading documents
+- AI extraction will work correctly for supported document types
+- Errors will be shown with helpful messages
+- Large images will be automatically resized before processing
 
-| File | Action | Description |
-|------|--------|-------------|
-| `supabase/functions/analyze-document/index.ts` | Create | Edge function for AI document analysis |
-| `supabase/config.toml` | Edit | Register new function |
-| `src/components/vehicle/EditableDetailItem.tsx` | Create | Editable field component |
-| `src/components/vehicle/DocumentAnalysisModal.tsx` | Create | AI extraction review modal |
-| `src/pages/VehicleDetails.tsx` | Edit | Add edit mode and AI integration |
-
-## Cost and Performance
-
-- **Gemini Vision calls**: ~1 per document upload (using google/gemini-2.5-pro for best vision accuracy)
-- **Payload size**: Documents are sent as base64 (max 5MB per file)
-- **Processing time**: 5-15 seconds per document depending on complexity
-- **Lovable AI costs**: Within free tier for typical usage
-
-## Edge Cases Handled
-
-1. **Low confidence extraction**: Show warning icon, let user verify
-2. **Conflicting data**: Show both extracted and current values clearly
-3. **Document in different language**: Gemini supports multiple languages including Hindi
-4. **Unreadable document**: Show error message, suggest re-uploading
-5. **PDF documents**: Convert first page to image for analysis
-6. **Wrong document type**: AI can detect and suggest correct type
-
-## Security Considerations
-
-- Documents are processed in-memory, not stored permanently
-- Base64 data is transmitted securely over HTTPS
-- User must be authenticated to upload/analyze documents
-- RLS policies ensure users can only update their own vehicles
