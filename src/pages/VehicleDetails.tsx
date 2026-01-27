@@ -10,7 +10,7 @@ import {
   ArrowLeft, Upload, FileText, Trash2, Download, 
   AlertTriangle, CheckCircle, Clock, Car, Calendar, Shield,
   Settings, User, Fuel, Palette, Users, Banknote, Hash,
-  Gauge, Weight, FileCheck, RefreshCw, Loader2
+  Gauge, Weight, FileCheck, RefreshCw, Loader2, Pencil, Save, X, Sparkles
 } from "lucide-react";
 import { format, differenceInDays, isPast, formatDistanceToNow } from "date-fns";
 import {
@@ -21,10 +21,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import DetailItem from "@/components/vehicle/DetailItem";
+import EditableDetailItem from "@/components/vehicle/EditableDetailItem";
 import SectionCard from "@/components/vehicle/SectionCard";
 import { useRefreshVehicle } from "@/hooks/useRefreshVehicle";
 import TransferVehicleDialog from "@/components/vehicle/TransferVehicleDialog";
 import VehicleHistory from "@/components/vehicle/VehicleHistory";
+import DocumentAnalysisModal from "@/components/vehicle/DocumentAnalysisModal";
 import { logVehicleEvent } from "@/lib/vehicleHistory";
 
 interface Vehicle {
@@ -42,7 +44,6 @@ interface Vehicle {
   fitness_valid_upto: string | null;
   road_tax_valid_upto: string | null;
   rc_status: string | null;
-  // New fields
   engine_number: string | null;
   chassis_number: string | null;
   color: string | null;
@@ -69,6 +70,12 @@ interface Document {
   uploaded_at: string;
 }
 
+interface AnalysisResult {
+  extractedFields: Record<string, any>;
+  confidence: "high" | "medium" | "low";
+  documentType: string;
+}
+
 const documentTypes = [
   { value: "insurance", label: "Insurance Policy" },
   { value: "rc", label: "Registration Certificate (RC)" },
@@ -85,7 +92,7 @@ const getExpiryStatus = (expiryDate: string | null) => {
   if (isPast(date)) {
     return { status: "expired", label: "Expired", variant: "destructive" as const, icon: AlertTriangle, color: "text-destructive" };
   } else if (daysLeft <= 30) {
-    return { status: "expiring", label: `${daysLeft} days left`, variant: "secondary" as const, icon: Clock, color: "text-yellow-600" };
+    return { status: "expiring", label: `${daysLeft} days left`, variant: "secondary" as const, icon: Clock, color: "text-amber-600" };
   } else {
     return { status: "valid", label: "Valid", variant: "default" as const, icon: CheckCircle, color: "text-green-600" };
   }
@@ -102,13 +109,22 @@ const VehicleDetails = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Refresh vehicle data hook - must be called unconditionally
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState<Record<string, any>>({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  // AI analysis state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+
+  // Refresh vehicle data hook
   const { isRefreshing, canRefresh, getTimeUntilRefresh, refreshVehicleData } = useRefreshVehicle({
     vehicleId: vehicle?.id || "",
     registrationNumber: vehicle?.registration_number || "",
     dataLastFetchedAt: vehicle?.data_last_fetched_at || null,
     onSuccess: () => {
-      // Re-fetch vehicle after refresh
       if (id) {
         supabase
           .from("vehicles")
@@ -166,6 +182,205 @@ const VehicleDetails = () => {
     }
   };
 
+  // Handle field changes in edit mode
+  const handleFieldChange = (fieldName: string, value: string) => {
+    setPendingChanges((prev) => ({
+      ...prev,
+      [fieldName]: value === "" ? null : value,
+    }));
+  };
+
+  // Get current value considering pending changes
+  const getCurrentValue = (fieldName: string) => {
+    if (fieldName in pendingChanges) {
+      return pendingChanges[fieldName];
+    }
+    return vehicle ? (vehicle as any)[fieldName] : null;
+  };
+
+  // Save pending changes
+  const handleSaveChanges = async () => {
+    if (!vehicle || Object.keys(pendingChanges).length === 0) {
+      setIsEditing(false);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Convert numeric fields
+      const updates = { ...pendingChanges };
+      if ("seating_capacity" in updates && updates.seating_capacity !== null) {
+        updates.seating_capacity = parseInt(updates.seating_capacity) || null;
+      }
+      if ("cubic_capacity" in updates && updates.cubic_capacity !== null) {
+        updates.cubic_capacity = parseInt(updates.cubic_capacity) || null;
+      }
+      if ("owner_count" in updates && updates.owner_count !== null) {
+        updates.owner_count = parseInt(updates.owner_count) || null;
+      }
+
+      const { error } = await supabase
+        .from("vehicles")
+        .update(updates)
+        .eq("id", vehicle.id);
+
+      if (error) throw error;
+
+      // Log the event
+      const changedFields = Object.keys(pendingChanges);
+      await logVehicleEvent({
+        vehicleId: vehicle.id,
+        eventType: "details_updated",
+        description: `Manually updated ${changedFields.length} field(s): ${changedFields.join(", ")}`,
+        metadata: { changedFields, previousValues: changedFields.reduce((acc, f) => ({ ...acc, [f]: (vehicle as any)[f] }), {}) },
+      });
+
+      // Refresh vehicle data
+      await fetchVehicle();
+
+      toast({
+        title: "Changes saved",
+        description: `Updated ${changedFields.length} field(s) successfully.`,
+      });
+
+      setPendingChanges({});
+      setIsEditing(false);
+    } catch (error: any) {
+      toast({
+        title: "Error saving changes",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setPendingChanges({});
+    setIsEditing(false);
+  };
+
+  // Analyze document with AI
+  const analyzeDocumentWithAI = async (file: File) => {
+    setIsAnalyzing(true);
+    try {
+      // Convert file to base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          const base64Data = result.split(",")[1];
+          resolve(base64Data);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const response = await supabase.functions.invoke("analyze-document", {
+        body: {
+          documentBase64: base64,
+          documentType: selectedDocType,
+          mimeType: file.type,
+          vehicleContext: {
+            registration_number: vehicle?.registration_number,
+            current_values: vehicle,
+          },
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      const data = response.data;
+      if (!data.success) {
+        throw new Error(data.error || "Analysis failed");
+      }
+
+      if (Object.keys(data.extractedFields).length === 0) {
+        toast({
+          title: "No data extracted",
+          description: "Could not extract any fields from this document. Try a clearer image.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setAnalysisResult({
+        extractedFields: data.extractedFields,
+        confidence: data.confidence,
+        documentType: data.documentTypeDetected || selectedDocType,
+      });
+      setShowAnalysisModal(true);
+    } catch (error: any) {
+      console.error("AI analysis error:", error);
+      toast({
+        title: "Analysis failed",
+        description: error.message || "Could not analyze the document",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Apply AI-extracted fields
+  const handleApplyExtractedFields = async (selectedFields: Record<string, any>) => {
+    if (!vehicle) return;
+
+    try {
+      // Convert numeric fields
+      const updates = { ...selectedFields };
+      if ("seating_capacity" in updates && updates.seating_capacity !== null) {
+        updates.seating_capacity = parseInt(updates.seating_capacity) || null;
+      }
+      if ("cubic_capacity" in updates && updates.cubic_capacity !== null) {
+        updates.cubic_capacity = parseInt(updates.cubic_capacity) || null;
+      }
+      if ("owner_count" in updates && updates.owner_count !== null) {
+        updates.owner_count = parseInt(updates.owner_count) || null;
+      }
+
+      const { error } = await supabase
+        .from("vehicles")
+        .update(updates)
+        .eq("id", vehicle.id);
+
+      if (error) throw error;
+
+      // Log the event
+      const changedFields = Object.keys(selectedFields);
+      await logVehicleEvent({
+        vehicleId: vehicle.id,
+        eventType: "ai_extraction",
+        description: `AI extracted and applied ${changedFields.length} field(s) from ${analysisResult?.documentType || "document"}`,
+        metadata: { 
+          changedFields, 
+          extractedValues: selectedFields,
+          confidence: analysisResult?.confidence 
+        },
+      });
+
+      await fetchVehicle();
+
+      toast({
+        title: "Fields updated",
+        description: `Applied ${changedFields.length} field(s) from document analysis.`,
+      });
+
+      setShowAnalysisModal(false);
+      setAnalysisResult(null);
+    } catch (error: any) {
+      toast({
+        title: "Error applying changes",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -187,6 +402,12 @@ const VehicleDetails = () => {
         variant: "destructive",
       });
       return;
+    }
+
+    // Start AI analysis for image files (not PDF)
+    const isImage = file.type.startsWith("image/");
+    if (isImage) {
+      analyzeDocumentWithAI(file);
     }
 
     setUploading(true);
@@ -218,7 +439,6 @@ const VehicleDetails = () => {
 
       if (dbError) throw dbError;
 
-      // Log history event
       await logVehicleEvent({
         vehicleId: id!,
         eventType: "document_uploaded",
@@ -284,7 +504,6 @@ const VehicleDetails = () => {
 
       if (dbError) throw dbError;
 
-      // Log history event
       await logVehicleEvent({
         vehicleId: id!,
         eventType: "document_deleted",
@@ -321,13 +540,14 @@ const VehicleDetails = () => {
     : null;
 
   const expiryItems = [
-    { label: "Insurance", date: vehicle.insurance_expiry, company: vehicle.insurance_company },
-    { label: "PUCC Certificate", date: vehicle.pucc_valid_upto },
-    { label: "Fitness Certificate", date: vehicle.fitness_valid_upto },
-    { label: "Road Tax", date: vehicle.road_tax_valid_upto },
+    { label: "Insurance", date: vehicle.insurance_expiry, company: vehicle.insurance_company, fieldName: "insurance_expiry" },
+    { label: "PUCC Certificate", date: vehicle.pucc_valid_upto, fieldName: "pucc_valid_upto" },
+    { label: "Fitness Certificate", date: vehicle.fitness_valid_upto, fieldName: "fitness_valid_upto" },
+    { label: "Road Tax", date: vehicle.road_tax_valid_upto, fieldName: "road_tax_valid_upto" },
   ];
 
   const timeUntilRefresh = getTimeUntilRefresh();
+  const hasChanges = Object.keys(pendingChanges).length > 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -370,33 +590,76 @@ const VehicleDetails = () => {
               </div>
               <div className="flex flex-col items-end gap-2">
                 <div className="flex gap-2">
-                  <TransferVehicleDialog
-                    vehicleId={vehicle.id}
-                    vehicleNumber={vehicle.registration_number}
-                    vehicleModel={vehicle.maker_model || vehicle.manufacturer}
-                    onTransferInitiated={fetchVehicle}
-                  />
-                  <Button
-                    variant={canRefresh ? "default" : "outline"}
-                    size="sm"
-                    onClick={refreshVehicleData}
-                    disabled={!canRefresh || isRefreshing}
-                  >
-                    {isRefreshing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Refreshing...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Refresh Data
-                      </>
-                    )}
-                  </Button>
+                  {isEditing ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCancelEdit}
+                        disabled={isSaving}
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveChanges}
+                        disabled={isSaving || !hasChanges}
+                      >
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-2" />
+                            Save Changes
+                          </>
+                        )}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditing(true)}
+                      >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit Details
+                      </Button>
+                      <TransferVehicleDialog
+                        vehicleId={vehicle.id}
+                        vehicleNumber={vehicle.registration_number}
+                        vehicleModel={vehicle.maker_model || vehicle.manufacturer}
+                        onTransferInitiated={fetchVehicle}
+                      />
+                      <Button
+                        variant={canRefresh ? "default" : "outline"}
+                        size="sm"
+                        onClick={refreshVehicleData}
+                        disabled={!canRefresh || isRefreshing}
+                      >
+                        {isRefreshing ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Refreshing...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Refresh Data
+                          </>
+                        )}
+                      </Button>
+                    </>
+                  )}
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {vehicle.data_last_fetched_at ? (
+                  {isEditing ? (
+                    hasChanges ? `${Object.keys(pendingChanges).length} unsaved change(s)` : "Click on fields to edit"
+                  ) : vehicle.data_last_fetched_at ? (
                     timeUntilRefresh ? (
                       `Can refresh in ${timeUntilRefresh.hours}h ${timeUntilRefresh.minutes}m`
                     ) : (
@@ -443,15 +706,55 @@ const VehicleDetails = () => {
         <SectionCard title="Vehicle Identity" icon={<Car className="h-5 w-5" />}>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <DetailItem label="Registration Number" value={vehicle.registration_number} />
-            <DetailItem label="Manufacturer" value={vehicle.manufacturer} />
-            <DetailItem label="Model" value={vehicle.maker_model} />
-            <DetailItem label="Vehicle Class" value={vehicle.vehicle_class} />
-            <DetailItem label="Vehicle Category" value={vehicle.vehicle_category} />
-            <DetailItem label="Body Type" value={vehicle.body_type} />
-            <DetailItem label="Color" value={vehicle.color} />
-            <DetailItem 
-              label="Registration Date" 
-              value={vehicle.registration_date ? format(new Date(vehicle.registration_date), "dd MMM yyyy") : null} 
+            <EditableDetailItem
+              label="Manufacturer"
+              value={getCurrentValue("manufacturer")}
+              fieldName="manufacturer"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+            />
+            <EditableDetailItem
+              label="Model"
+              value={getCurrentValue("maker_model")}
+              fieldName="maker_model"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+            />
+            <EditableDetailItem
+              label="Vehicle Class"
+              value={getCurrentValue("vehicle_class")}
+              fieldName="vehicle_class"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+            />
+            <EditableDetailItem
+              label="Vehicle Category"
+              value={getCurrentValue("vehicle_category")}
+              fieldName="vehicle_category"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+            />
+            <EditableDetailItem
+              label="Body Type"
+              value={getCurrentValue("body_type")}
+              fieldName="body_type"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+            />
+            <EditableDetailItem
+              label="Color"
+              value={getCurrentValue("color")}
+              fieldName="color"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+            />
+            <EditableDetailItem
+              label="Registration Date"
+              value={getCurrentValue("registration_date")}
+              fieldName="registration_date"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              inputType="date"
             />
             <div className="space-y-1">
               <span className="text-sm text-muted-foreground">RC Status</span>
@@ -471,48 +774,103 @@ const VehicleDetails = () => {
         {/* Technical Specifications Section */}
         <SectionCard title="Technical Specifications" icon={<Settings className="h-5 w-5" />}>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <DetailItem label="Engine Number" value={vehicle.engine_number} icon={<Hash className="h-3.5 w-3.5" />} />
-            <DetailItem label="Chassis Number" value={vehicle.chassis_number} icon={<Hash className="h-3.5 w-3.5" />} />
-            <DetailItem 
-              label="Cubic Capacity" 
-              value={vehicle.cubic_capacity ? `${vehicle.cubic_capacity} cc` : null} 
-              icon={<Gauge className="h-3.5 w-3.5" />} 
+            <EditableDetailItem
+              label="Engine Number"
+              value={getCurrentValue("engine_number")}
+              fieldName="engine_number"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              icon={<Hash className="h-3.5 w-3.5" />}
             />
-            <DetailItem label="Fuel Type" value={vehicle.fuel_type} icon={<Fuel className="h-3.5 w-3.5" />} />
-            <DetailItem 
-              label="Seating Capacity" 
-              value={vehicle.seating_capacity ? `${vehicle.seating_capacity} Seats` : null} 
-              icon={<Users className="h-3.5 w-3.5" />} 
+            <EditableDetailItem
+              label="Chassis Number"
+              value={getCurrentValue("chassis_number")}
+              fieldName="chassis_number"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              icon={<Hash className="h-3.5 w-3.5" />}
             />
-            <DetailItem label="Emission Norms" value={vehicle.emission_norms} icon={<FileCheck className="h-3.5 w-3.5" />} />
-            <DetailItem label="Wheelbase" value={vehicle.wheelbase} icon={<Weight className="h-3.5 w-3.5" />} />
-            <DetailItem label="Gross Vehicle Weight" value={vehicle.gross_vehicle_weight} icon={<Weight className="h-3.5 w-3.5" />} />
-            <DetailItem label="Unladen Weight" value={vehicle.unladen_weight} icon={<Weight className="h-3.5 w-3.5" />} />
+            <EditableDetailItem
+              label="Cubic Capacity (cc)"
+              value={getCurrentValue("cubic_capacity")}
+              fieldName="cubic_capacity"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              inputType="number"
+              icon={<Gauge className="h-3.5 w-3.5" />}
+            />
+            <EditableDetailItem
+              label="Fuel Type"
+              value={getCurrentValue("fuel_type")}
+              fieldName="fuel_type"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              icon={<Fuel className="h-3.5 w-3.5" />}
+            />
+            <EditableDetailItem
+              label="Seating Capacity"
+              value={getCurrentValue("seating_capacity")}
+              fieldName="seating_capacity"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              inputType="number"
+              icon={<Users className="h-3.5 w-3.5" />}
+            />
+            <EditableDetailItem
+              label="Emission Norms"
+              value={getCurrentValue("emission_norms")}
+              fieldName="emission_norms"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              icon={<FileCheck className="h-3.5 w-3.5" />}
+            />
+            <EditableDetailItem
+              label="Wheelbase"
+              value={getCurrentValue("wheelbase")}
+              fieldName="wheelbase"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              icon={<Weight className="h-3.5 w-3.5" />}
+            />
+            <EditableDetailItem
+              label="Gross Vehicle Weight"
+              value={getCurrentValue("gross_vehicle_weight")}
+              fieldName="gross_vehicle_weight"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              icon={<Weight className="h-3.5 w-3.5" />}
+            />
+            <EditableDetailItem
+              label="Unladen Weight"
+              value={getCurrentValue("unladen_weight")}
+              fieldName="unladen_weight"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              icon={<Weight className="h-3.5 w-3.5" />}
+            />
           </div>
         </SectionCard>
 
         {/* Ownership & Finance Section */}
         <SectionCard title="Ownership & Finance" icon={<User className="h-5 w-5" />}>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <DetailItem label="Owner Name" value={vehicle.owner_name} icon={<User className="h-3.5 w-3.5" />} />
-            <div className="space-y-1">
-              <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5" />
-                Owner Count
-              </span>
-              <div className="flex items-center gap-2">
-                {vehicle.owner_count !== null ? (
-                  <>
-                    <span className="font-medium">{vehicle.owner_count}</span>
-                    <Badge variant={vehicle.owner_count === 1 ? "default" : "secondary"}>
-                      {vehicle.owner_count === 1 ? "First Owner" : `${vehicle.owner_count} Owners`}
-                    </Badge>
-                  </>
-                ) : (
-                  <p className="font-medium text-muted-foreground italic">Not Available</p>
-                )}
-              </div>
-            </div>
+            <EditableDetailItem
+              label="Owner Name"
+              value={getCurrentValue("owner_name")}
+              fieldName="owner_name"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              icon={<User className="h-3.5 w-3.5" />}
+            />
+            <EditableDetailItem
+              label="Owner Count"
+              value={getCurrentValue("owner_count")}
+              fieldName="owner_count"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              inputType="number"
+              icon={<Users className="h-3.5 w-3.5" />}
+            />
             <div className="space-y-1">
               <span className="text-sm text-muted-foreground flex items-center gap-1.5">
                 <Banknote className="h-3.5 w-3.5" />
@@ -524,48 +882,104 @@ const VehicleDetails = () => {
                 </Badge>
               </div>
             </div>
-            {vehicle.is_financed && (
-              <DetailItem label="Financer" value={vehicle.financer} icon={<Banknote className="h-3.5 w-3.5" />} />
-            )}
-            <DetailItem label="NOC Details" value={vehicle.noc_details} icon={<FileCheck className="h-3.5 w-3.5" />} />
+            <EditableDetailItem
+              label="Financer"
+              value={getCurrentValue("financer")}
+              fieldName="financer"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              icon={<Banknote className="h-3.5 w-3.5" />}
+            />
+            <EditableDetailItem
+              label="NOC Details"
+              value={getCurrentValue("noc_details")}
+              fieldName="noc_details"
+              isEditing={isEditing}
+              onChange={handleFieldChange}
+              icon={<FileCheck className="h-3.5 w-3.5" />}
+            />
           </div>
         </SectionCard>
 
         {/* Document Expiry Status */}
         <SectionCard title="Document Expiry Status" icon={<Calendar className="h-5 w-5" />}>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {expiryItems.map((item) => {
-              const status = getExpiryStatus(item.date);
-              return (
-                <div key={item.label} className="flex items-center justify-between p-3 rounded-lg border">
-                  <div>
-                    <p className="font-medium">{item.label}</p>
-                    {item.date ? (
-                      <p className="text-sm text-muted-foreground">
-                        {format(new Date(item.date), "dd MMM yyyy")}
-                        {item.company && ` • ${item.company}`}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Not available</p>
+          {isEditing ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <EditableDetailItem
+                label="Insurance Expiry"
+                value={getCurrentValue("insurance_expiry")}
+                fieldName="insurance_expiry"
+                isEditing={isEditing}
+                onChange={handleFieldChange}
+                inputType="date"
+              />
+              <EditableDetailItem
+                label="Insurance Company"
+                value={getCurrentValue("insurance_company")}
+                fieldName="insurance_company"
+                isEditing={isEditing}
+                onChange={handleFieldChange}
+              />
+              <EditableDetailItem
+                label="PUCC Valid Until"
+                value={getCurrentValue("pucc_valid_upto")}
+                fieldName="pucc_valid_upto"
+                isEditing={isEditing}
+                onChange={handleFieldChange}
+                inputType="date"
+              />
+              <EditableDetailItem
+                label="Fitness Valid Until"
+                value={getCurrentValue("fitness_valid_upto")}
+                fieldName="fitness_valid_upto"
+                isEditing={isEditing}
+                onChange={handleFieldChange}
+                inputType="date"
+              />
+              <EditableDetailItem
+                label="Road Tax Valid Until"
+                value={getCurrentValue("road_tax_valid_upto")}
+                fieldName="road_tax_valid_upto"
+                isEditing={isEditing}
+                onChange={handleFieldChange}
+                inputType="date"
+              />
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {expiryItems.map((item) => {
+                const status = getExpiryStatus(item.date);
+                return (
+                  <div key={item.label} className="flex items-center justify-between p-3 rounded-lg border">
+                    <div>
+                      <p className="font-medium">{item.label}</p>
+                      {item.date ? (
+                        <p className="text-sm text-muted-foreground">
+                          {format(new Date(item.date), "dd MMM yyyy")}
+                          {item.company && ` • ${item.company}`}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Not available</p>
+                      )}
+                    </div>
+                    {status && (
+                      <Badge variant={status.variant} className="flex items-center gap-1">
+                        <status.icon className="h-3 w-3" />
+                        {status.label}
+                      </Badge>
                     )}
                   </div>
-                  {status && (
-                    <Badge variant={status.variant} className="flex items-center gap-1">
-                      <status.icon className="h-3 w-3" />
-                      {status.label}
-                    </Badge>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </SectionCard>
 
         {/* Document Repository */}
         <SectionCard title="Document Repository" icon={<Shield className="h-5 w-5" />}>
           <div className="mb-4">
             <p className="text-sm text-muted-foreground mb-4">
-              Upload and store your vehicle documents for easy access
+              Upload documents to store them and optionally extract data using AI
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
@@ -593,13 +1007,33 @@ const VehicleDetails = () => {
                 />
                 <Button 
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
+                  disabled={uploading || isAnalyzing}
                 >
-                  <Upload className="h-4 w-4 mr-2" />
-                  {uploading ? "Uploading..." : "Upload Document"}
+                  {isAnalyzing ? (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : uploading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Document
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
+            {isAnalyzing && (
+              <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+                <span>AI is analyzing your document to extract vehicle data...</span>
+              </div>
+            )}
           </div>
 
           {documents.length === 0 ? (
@@ -638,6 +1072,19 @@ const VehicleDetails = () => {
         {/* Vehicle History Log */}
         <VehicleHistory vehicleId={vehicle.id} />
       </main>
+
+      {/* AI Analysis Modal */}
+      {analysisResult && (
+        <DocumentAnalysisModal
+          open={showAnalysisModal}
+          onOpenChange={setShowAnalysisModal}
+          extractedFields={analysisResult.extractedFields}
+          currentValues={vehicle}
+          confidence={analysisResult.confidence}
+          documentType={analysisResult.documentType}
+          onApply={handleApplyExtractedFields}
+        />
+      )}
     </div>
   );
 };
