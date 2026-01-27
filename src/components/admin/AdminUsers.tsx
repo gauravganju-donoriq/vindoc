@@ -3,6 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { Pause, Play, Loader2 } from "lucide-react";
@@ -24,6 +34,7 @@ export function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [userToSuspend, setUserToSuspend] = useState<User | null>(null);
 
   const fetchUsers = async () => {
     const fetchWithRetry = async (maxRetries = 2) => {
@@ -60,6 +71,7 @@ export function AdminUsers() {
   }, []);
 
   const handleSuspendUser = async (userId: string) => {
+    setUserToSuspend(null);
     setActionLoading(userId);
     try {
       const { data, error } = await supabase.functions.invoke("admin-data", {
@@ -123,90 +135,113 @@ export function AdminUsers() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Platform Users ({users.length})</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {users.length === 0 ? (
-          <p className="text-muted-foreground text-center py-8">No users found</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead className="text-center">Vehicles</TableHead>
-                <TableHead className="text-center">Documents</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>First Vehicle Added</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.userId} className={user.isSuspended ? "opacity-60" : ""}>
-                  <TableCell className="font-medium">{user.email}</TableCell>
-                  <TableCell className="text-center">{user.vehicleCount}</TableCell>
-                  <TableCell className="text-center">{user.documentCount}</TableCell>
-                  <TableCell>
-                    {user.isSuspended ? (
-                      <Badge variant="destructive" className="flex items-center gap-1 w-fit">
-                        <Pause className="h-3 w-3" />
-                        Suspended
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-green-600 border-green-600">
-                        Active
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {user.joinDate
-                      ? format(new Date(user.joinDate), "dd MMM yyyy")
-                      : "—"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {user.isSuspended ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleUnsuspendUser(user.userId)}
-                        disabled={actionLoading === user.userId}
-                      >
-                        {actionLoading === user.userId ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Play className="h-4 w-4 mr-1" />
-                            Unsuspend
-                          </>
-                        )}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleSuspendUser(user.userId)}
-                        disabled={actionLoading === user.userId}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        {actionLoading === user.userId ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Pause className="h-4 w-4 mr-1" />
-                            Suspend
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </TableCell>
+    <>
+      <AlertDialog open={!!userToSuspend} onOpenChange={(open) => !open && setUserToSuspend(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Suspend User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to suspend <strong>{userToSuspend?.email}</strong>? 
+              This user will no longer be able to access the platform until unsuspended.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => userToSuspend && handleSuspendUser(userToSuspend.userId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Suspend User
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Platform Users ({users.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {users.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">No users found</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Email</TableHead>
+                  <TableHead className="text-center">Vehicles</TableHead>
+                  <TableHead className="text-center">Documents</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>First Vehicle Added</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.userId} className={user.isSuspended ? "opacity-60" : ""}>
+                    <TableCell className="font-medium">{user.email}</TableCell>
+                    <TableCell className="text-center">{user.vehicleCount}</TableCell>
+                    <TableCell className="text-center">{user.documentCount}</TableCell>
+                    <TableCell>
+                      {user.isSuspended ? (
+                        <Badge variant="destructive" className="flex items-center gap-1 w-fit">
+                          <Pause className="h-3 w-3" />
+                          Suspended
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-primary">
+                          Active
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {user.joinDate
+                        ? format(new Date(user.joinDate), "dd MMM yyyy")
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {user.isSuspended ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleUnsuspendUser(user.userId)}
+                          disabled={actionLoading === user.userId}
+                        >
+                          {actionLoading === user.userId ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Play className="h-4 w-4 mr-1" />
+                              Unsuspend
+                            </>
+                          )}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setUserToSuspend(user)}
+                          disabled={actionLoading === user.userId}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          {actionLoading === user.userId ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Pause className="h-4 w-4 mr-1" />
+                              Suspend
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </>
   );
 }
