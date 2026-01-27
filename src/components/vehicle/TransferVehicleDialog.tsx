@@ -16,6 +16,7 @@ import {
 import { ArrowRightLeft, Loader2 } from "lucide-react";
 import { addDays } from "date-fns";
 import { z } from "zod";
+import { logVehicleEvent } from "@/lib/vehicleHistory";
 
 const transferSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -108,6 +109,14 @@ export default function TransferVehicleDialog({
         });
 
       if (insertError) throw insertError;
+
+      // Log history event
+      await logVehicleEvent({
+        vehicleId,
+        eventType: "transfer_initiated",
+        description: `Transfer initiated to ${email}`,
+        metadata: { recipientEmail: email.toLowerCase(), recipientPhone: phone || null },
+      });
 
       // Send email notification
       const { error: emailError } = await supabase.functions.invoke("send-transfer-notification", {

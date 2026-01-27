@@ -24,6 +24,8 @@ import DetailItem from "@/components/vehicle/DetailItem";
 import SectionCard from "@/components/vehicle/SectionCard";
 import { useRefreshVehicle } from "@/hooks/useRefreshVehicle";
 import TransferVehicleDialog from "@/components/vehicle/TransferVehicleDialog";
+import VehicleHistory from "@/components/vehicle/VehicleHistory";
+import { logVehicleEvent } from "@/lib/vehicleHistory";
 
 interface Vehicle {
   id: string;
@@ -196,6 +198,14 @@ const VehicleDetails = () => {
 
       if (dbError) throw dbError;
 
+      // Log history event
+      await logVehicleEvent({
+        vehicleId: id!,
+        eventType: "document_uploaded",
+        description: `Uploaded ${documentTypes.find(t => t.value === selectedDocType)?.label || selectedDocType}`,
+        metadata: { fileName: file.name, fileSize: file.size, documentType: selectedDocType },
+      });
+
       toast({
         title: "Document uploaded",
         description: `${file.name} has been uploaded successfully.`,
@@ -253,6 +263,14 @@ const VehicleDetails = () => {
         .eq("id", doc.id);
 
       if (dbError) throw dbError;
+
+      // Log history event
+      await logVehicleEvent({
+        vehicleId: id!,
+        eventType: "document_deleted",
+        description: `Deleted ${documentTypes.find(t => t.value === doc.document_type)?.label || doc.document_type}`,
+        metadata: { fileName: doc.document_name, documentType: doc.document_type },
+      });
 
       setDocuments(documents.filter((d) => d.id !== doc.id));
       toast({
@@ -603,6 +621,9 @@ const VehicleDetails = () => {
             </div>
           )}
         </SectionCard>
+
+        {/* Vehicle History Log */}
+        <VehicleHistory vehicleId={vehicle.id} />
       </main>
     </div>
   );
