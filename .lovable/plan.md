@@ -1,121 +1,178 @@
 
 
-# Plan: Universal Document Analysis & Auto-Extraction
+# Plan: Super Admin Dashboard Implementation
 
 ## Overview
 
-Transform the document upload workflow to automatically analyze and extract data from any uploaded document, regardless of whether the user tags it with a specific type. The AI will detect the document type and extract all relevant vehicle fields.
+Implement a comprehensive super admin dashboard accessible only by `lestero@ignitecinc.com`. The admin will be able to monitor users, view their activity, see all vehicles on the platform, and access platform-wide analytics. Access control will be enforced using a secure `user_roles` table with RLS policies and a security definer function.
 
-## Current Behavior vs New Behavior
+## Security Architecture
 
-| Current | New |
-|---------|-----|
-| User must select document type dropdown | Document type selection becomes optional (can default to "auto-detect") |
-| AI only extracts fields for selected type | AI extracts ALL possible fields from any document |
-| Limited extraction if wrong type selected | AI detects document type automatically |
-| User might skip tagging entirely | Every image upload triggers smart extraction |
+The admin access will be secured using:
+1. A `user_roles` table storing admin roles (following Supabase security best practices)
+2. A security definer function `has_role()` to check admin status without RLS recursion
+3. An Edge Function to fetch admin data (since admins need cross-user access)
+4. Frontend route protection checking admin status
 
-## Implementation Plan
-
-### 1. Update Edge Function for Universal Extraction
-
-Modify `supabase/functions/analyze-document/index.ts`:
-
-- Add a new "auto" document type that triggers universal extraction
-- When document type is "auto" or not recognized, extract ALL possible fields
-- Improve the AI prompt to first identify the document type, then extract relevant fields
-- Return the detected document type along with extracted fields
-
-**Key Changes:**
 ```text
-- Add universal field list for "auto" mode (all fields from all document types)
-- Update system prompt to: "First identify what type of document this is, then extract all visible fields"
-- Always return document_type_detected in response
+User Flow:
+1. User logs in with lestero@ignitecinc.com
+2. System checks user_roles table for 'super_admin' role
+3. If admin, show "Admin Dashboard" link in header
+4. Admin dashboard loads data via Edge Function (bypasses RLS)
 ```
 
-### 2. Update Document Type Dropdown
+## Database Changes
 
-Modify `src/pages/VehicleDetails.tsx`:
+### 1. Create Role Enum and user_roles Table
 
-- Add "Auto-Detect" as the first/default option in the dropdown
-- Change default `selectedDocType` from "insurance" to "auto"
-- Keep existing document types for users who want to explicitly tag
+```sql
+-- Create role enum
+CREATE TYPE public.app_role AS ENUM ('super_admin', 'user');
 
-**New dropdown options:**
-```text
-- Auto-Detect (Recommended) ← NEW default
-- Insurance Policy
-- Registration Certificate (RC)
-- PUCC Certificate
-- Fitness Certificate
-- Other Document
+-- Create user_roles table
+CREATE TABLE public.user_roles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  role app_role NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE (user_id, role)
+);
+
+-- Enable RLS
+ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
+
+-- Users can only view their own roles
+CREATE POLICY "Users can view their own roles"
+  ON public.user_roles FOR SELECT
+  USING (auth.uid() = user_id);
 ```
 
-### 3. Update Document Storage with Detected Type
+### 2. Create Security Definer Function
 
-After AI analysis completes:
+```sql
+CREATE OR REPLACE FUNCTION public.has_role(_user_id uuid, _role app_role)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.user_roles
+    WHERE user_id = _user_id
+      AND role = _role
+  )
+$$;
+```
 
-- Update the document record in the database with the AI-detected document type
-- This way, even if user selected "auto", the stored document will have the correct type for future reference
+### 3. Seed Initial Admin User
 
-### 4. Enhanced AI Prompt for Better Detection
+After the user with email `lestero@ignitecinc.com` logs in, their role will be assigned via an Edge Function or manual insert. For safety, we'll create an Edge Function that checks email and assigns admin role on first access.
 
-Improve the AI prompt to:
-- First analyze the document and identify its type (insurance, RC, PUCC, fitness, or other)
-- Then extract ALL visible fields that match vehicle data
-- Provide confidence level for both detection and extraction
+## New Edge Function: admin-data
+
+Create `supabase/functions/admin-data/index.ts` to fetch platform-wide data for admins only.
+
+**Endpoints:**
+- `GET /admin-data?type=overview` - Platform stats (total users, vehicles, documents)
+- `GET /admin-data?type=users` - All users with their vehicle counts
+- `GET /admin-data?type=activity` - Recent activity across all users
+- `GET /admin-data?type=vehicles` - All vehicles on the platform
+
+**Security:**
+- Verify JWT and check if user email is `lestero@ignitecinc.com`
+- Uses service role key to bypass RLS for admin queries
+
+## Frontend Implementation
+
+### 1. New Admin Pages
+
+| File | Purpose |
+|------|---------|
+| `src/pages/Admin.tsx` | Main admin dashboard with tabs/sections |
+| `src/components/admin/AdminOverview.tsx` | Platform statistics cards |
+| `src/components/admin/AdminUsers.tsx` | User listing with details |
+| `src/components/admin/AdminActivity.tsx` | Activity feed from vehicle_history |
+| `src/components/admin/AdminVehicles.tsx` | All vehicles table |
+
+### 2. Admin Route Protection
+
+Create `src/hooks/useAdminCheck.ts`:
+- Check if current user's email matches admin email
+- Redirect non-admins away from /admin routes
+
+### 3. Update App.tsx Routes
+
+```text
+Add new route:
+  <Route path="/admin" element={<Admin />} />
+```
+
+### 4. Update Dashboard Header
+
+For the admin user, show an "Admin" link in the header next to Logout.
+
+## Admin Dashboard Features
+
+### Overview Tab
+- Total registered users
+- Total vehicles on platform
+- Total documents uploaded
+- Verified vs unverified vehicle ratio
+- Documents expiring this month
+
+### Users Tab
+- Table showing all users
+- Columns: Email, Vehicles Count, Documents Count, Join Date, Last Active
+- Click to see user's vehicles
+
+### Activity Tab
+- Real-time activity feed from vehicle_history table
+- Shows all user activities across the platform
+- Filters by activity type
+
+### Vehicles Tab
+- Table of all vehicles
+- Columns: Registration, Owner, User Email, Verified Status, Created Date
+- Search/filter capabilities
 
 ## File Changes Summary
 
-| File | Changes |
-|------|---------|
-| `supabase/functions/analyze-document/index.ts` | Add "auto" mode, universal field list, improved prompts |
-| `src/pages/VehicleDetails.tsx` | Add "Auto-Detect" option, change default, update document type after analysis |
+| File | Action | Description |
+|------|--------|-------------|
+| `supabase/functions/admin-data/index.ts` | Create | Edge function for admin data access |
+| `src/pages/Admin.tsx` | Create | Main admin dashboard page |
+| `src/components/admin/AdminOverview.tsx` | Create | Stats overview component |
+| `src/components/admin/AdminUsers.tsx` | Create | Users list component |
+| `src/components/admin/AdminActivity.tsx` | Create | Activity feed component |
+| `src/components/admin/AdminVehicles.tsx` | Create | Vehicles list component |
+| `src/hooks/useAdminCheck.ts` | Create | Admin role verification hook |
+| `src/App.tsx` | Update | Add /admin route |
+| `src/pages/Dashboard.tsx` | Update | Add Admin link for admin users |
 
-## Technical Details
+## Database Migration Summary
 
-### Edge Function Changes
+1. Create `app_role` enum with values: `super_admin`, `user`
+2. Create `user_roles` table with proper RLS
+3. Create `has_role` security definer function
+4. Insert admin role for the specified email when they first access admin
 
-1. **Universal field list for auto-detection:**
-   ```text
-   All fields combined: owner_name, insurance_company, insurance_expiry, 
-   chassis_number, engine_number, registration_date, manufacturer, maker_model, 
-   fuel_type, color, seating_capacity, cubic_capacity, vehicle_class, body_type, 
-   vehicle_category, gross_vehicle_weight, unladen_weight, pucc_valid_upto, 
-   fitness_valid_upto, road_tax_valid_upto, emission_norms
-   ```
+## Implementation Order
 
-2. **Updated AI system prompt:**
-   - Instruct AI to first identify the document type
-   - Then extract all visible fields regardless of document type
-   - Return both detected type and extracted fields
+1. Database: Create enum, table, and function via migration
+2. Edge Function: Create admin-data function with proper auth checks
+3. Frontend Hook: Create useAdminCheck hook
+4. Admin Pages: Create Admin.tsx and sub-components
+5. Integration: Update App.tsx routes and Dashboard header
+6. Seed Admin: Add role for lestero@ignitecinc.com
 
-### Frontend Changes
+## Security Considerations
 
-1. **Default to auto-detect:**
-   - Users can still manually select a type if they prefer
-   - Auto-detect ensures maximum extraction without user effort
-
-2. **Update stored document type:**
-   - After successful analysis, update the `document_type` field in the `documents` table with the AI-detected type
-   - This provides accurate categorization for the document repository
-
-## User Experience Flow
-
-1. User clicks "Upload Document" button
-2. Consent dialog appears (existing behavior)
-3. User selects file (document type defaults to "Auto-Detect")
-4. File uploads and AI analysis begins automatically
-5. AI detects document type and extracts all visible fields
-6. Document Analysis Modal shows extracted data with detected type badge
-7. User reviews and selects which fields to apply
-8. Document is saved with AI-detected type in repository
-
-## Benefits
-
-- No dependency on user correctly tagging documents
-- Maximum data extraction from every upload
-- Cleaner user experience (less decisions needed)
-- Documents still get properly categorized via AI detection
-- Backward compatible (manual tagging still works)
+- Admin email is hardcoded in Edge Function for verification
+- Service role key used in Edge Function to bypass RLS
+- Frontend only shows admin link if email matches (defense in depth)
+- All admin data fetched via authenticated Edge Function calls
+- No client-side role storage (prevents manipulation)
 
