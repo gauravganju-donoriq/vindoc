@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Car, Plus, LogOut, AlertTriangle, CheckCircle, Clock, Trash2 } from "lucide-react";
+import { Car, Plus, LogOut, AlertTriangle, CheckCircle, Clock, Trash2, ShieldCheck, ShieldX } from "lucide-react";
 import { format, differenceInDays, isPast } from "date-fns";
 import {
   AlertDialog,
@@ -30,6 +30,7 @@ interface Vehicle {
   pucc_valid_upto: string | null;
   fitness_valid_upto: string | null;
   road_tax_valid_upto: string | null;
+  is_verified: boolean | null;
 }
 
 const getExpiryStatus = (expiryDate: string | null) => {
@@ -222,12 +223,25 @@ const Dashboard = () => {
                           {vehicle.maker_model || vehicle.manufacturer || "Vehicle details not available"}
                         </CardDescription>
                       </div>
-                      {urgentStatus && (
-                        <Badge variant={urgentStatus.status.variant} className="flex items-center gap-1">
-                          <urgentStatus.status.icon className="h-3 w-3" />
-                          {urgentStatus.type}
-                        </Badge>
-                      )}
+                      <div className="flex flex-col gap-1 items-end">
+                        {vehicle.is_verified ? (
+                          <Badge className="flex items-center gap-1 bg-primary text-primary-foreground">
+                            <ShieldCheck className="h-3 w-3" />
+                            Verified
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="flex items-center gap-1 text-muted-foreground">
+                            <ShieldX className="h-3 w-3" />
+                            Unverified
+                          </Badge>
+                        )}
+                        {urgentStatus && (
+                          <Badge variant={urgentStatus.status.variant} className="flex items-center gap-1">
+                            <urgentStatus.status.icon className="h-3 w-3" />
+                            {urgentStatus.type}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
