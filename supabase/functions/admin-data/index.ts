@@ -32,19 +32,19 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Verify the user and get their email
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+    // Verify the user and get their email using getUser()
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
     
-    if (claimsError || !claimsData?.claims) {
+    if (userError || !user) {
+      console.error("Auth error:", userError);
       return new Response(
         JSON.stringify({ error: "Invalid token" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const userEmail = claimsData.claims.email as string;
-    const userId = claimsData.claims.sub as string;
+    const userEmail = user.email;
+    const userId = user.id;
 
     // Check if user is the admin
     if (userEmail !== ADMIN_EMAIL) {
