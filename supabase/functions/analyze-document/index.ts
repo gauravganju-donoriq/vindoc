@@ -87,9 +87,9 @@ Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
       mediaType = "image/jpeg";
     }
 
-    console.log(`Sending request to AI gateway with model openai/gpt-5-mini`);
+    console.log(`Sending request to AI gateway with model google/gemini-2.5-pro`);
 
-    // Use OpenAI model which has better image handling
+    // Use Gemini Pro which has strongest document/image understanding
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -97,7 +97,7 @@ Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-5-mini",
+        model: "google/gemini-2.5-pro",
         messages: [
           { role: "system", content: systemPrompt },
           { 
