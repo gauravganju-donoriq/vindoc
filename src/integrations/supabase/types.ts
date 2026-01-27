@@ -96,6 +96,56 @@ export type Database = {
           },
         ]
       }
+      ownership_claims: {
+        Row: {
+          claimant_email: string
+          claimant_id: string
+          claimant_phone: string | null
+          created_at: string
+          current_owner_id: string
+          expires_at: string
+          id: string
+          message: string | null
+          registration_number: string
+          status: string
+          vehicle_id: string
+        }
+        Insert: {
+          claimant_email: string
+          claimant_id: string
+          claimant_phone?: string | null
+          created_at?: string
+          current_owner_id: string
+          expires_at: string
+          id?: string
+          message?: string | null
+          registration_number: string
+          status?: string
+          vehicle_id: string
+        }
+        Update: {
+          claimant_email?: string
+          claimant_id?: string
+          claimant_phone?: string | null
+          created_at?: string
+          current_owner_id?: string
+          expires_at?: string
+          id?: string
+          message?: string | null
+          registration_number?: string
+          status?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ownership_claims_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
