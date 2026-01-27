@@ -421,6 +421,43 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case "get_vehicle_for_claim": {
+        const regNumber = body?.registrationNumber as string;
+
+        if (!regNumber) {
+          return new Response(
+            JSON.stringify({ error: "registrationNumber is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const { data: vehicleData, error: vehicleError } = await adminClient
+          .from("vehicles")
+          .select("id, user_id, registration_number, maker_model")
+          .eq("registration_number", regNumber.toUpperCase())
+          .maybeSingle();
+
+        if (vehicleError) {
+          console.error("Vehicle lookup error:", vehicleError);
+          return new Response(
+            JSON.stringify({ found: false, error: "Lookup failed" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (!vehicleData) {
+          responseData = { found: false };
+        } else {
+          responseData = {
+            found: true,
+            vehicleId: vehicleData.id,
+            ownerId: vehicleData.user_id,
+            makerModel: vehicleData.maker_model,
+          };
+        }
+        break;
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: "Invalid type parameter" }),
