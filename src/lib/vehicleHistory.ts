@@ -10,7 +10,9 @@ export type VehicleEventType =
   | "transfer_accepted"
   | "transfer_rejected"
   | "transfer_cancelled"
-  | "transfer_expired";
+  | "transfer_expired"
+  | "details_updated"
+  | "ai_extraction";
 
 interface LogEventParams {
   vehicleId: string;
@@ -60,6 +62,8 @@ export function getEventIcon(eventType: VehicleEventType): string {
     transfer_rejected: "❌",
     transfer_cancelled: "🚫",
     transfer_expired: "⏰",
+    details_updated: "📝",
+    ai_extraction: "🤖",
   };
   return icons[eventType] || "📝";
 }
@@ -76,6 +80,8 @@ export function getEventColor(eventType: VehicleEventType): string {
     transfer_rejected: "text-red-600",
     transfer_cancelled: "text-muted-foreground",
     transfer_expired: "text-muted-foreground",
+    details_updated: "text-blue-600",
+    ai_extraction: "text-purple-600",
   };
   return colors[eventType] || "text-foreground";
 }
