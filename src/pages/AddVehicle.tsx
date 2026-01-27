@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Search, Loader2, Car } from "lucide-react";
 import { format } from "date-fns";
+import { logVehicleEvent } from "@/lib/vehicleHistory";
 
 interface FetchedVehicleData {
   owner_name?: string;
@@ -148,7 +149,11 @@ const AddVehicle = () => {
         data_last_fetched_at: fetchedData ? new Date().toISOString() : null,
       };
 
-      const { error } = await supabase.from("vehicles").insert(vehicleData);
+      const { data: insertedVehicle, error } = await supabase
+        .from("vehicles")
+        .insert(vehicleData)
+        .select("id")
+        .single();
 
       if (error) {
         if (error.code === "23505") {
@@ -160,6 +165,20 @@ const AddVehicle = () => {
           return;
         }
         throw error;
+      }
+
+      // Log history event
+      if (insertedVehicle) {
+        await logVehicleEvent({
+          vehicleId: insertedVehicle.id,
+          eventType: "vehicle_added",
+          description: `Vehicle ${formatRegNumber(registrationNumber)} added`,
+          metadata: { 
+            fetchedFromApi: !!fetchedData,
+            manufacturer: fetchedData?.manufacturer || null,
+            model: fetchedData?.maker_model || null,
+          },
+        });
       }
 
       toast({

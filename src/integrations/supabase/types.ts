@@ -55,6 +55,44 @@ export type Database = {
           },
         ]
       }
+      vehicle_history: {
+        Row: {
+          created_at: string
+          event_description: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_description: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          event_description?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_transfers: {
         Row: {
           created_at: string

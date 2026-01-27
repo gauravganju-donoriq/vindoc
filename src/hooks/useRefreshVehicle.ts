@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { differenceInHours, differenceInMinutes } from "date-fns";
+import { logVehicleEvent } from "@/lib/vehicleHistory";
 
 const REFRESH_COOLDOWN_HOURS = 48;
 
@@ -99,6 +100,13 @@ export function useRefreshVehicle({
           .eq("id", vehicleId);
 
         if (updateError) throw updateError;
+
+        // Log history event
+        await logVehicleEvent({
+          vehicleId,
+          eventType: "data_refreshed",
+          description: "Vehicle data refreshed from RTO database",
+        });
 
         toast({
           title: "Vehicle data refreshed",

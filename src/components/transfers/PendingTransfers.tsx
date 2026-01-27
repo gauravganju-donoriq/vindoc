@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { ArrowRightLeft, Check, X, Clock, Loader2, Car } from "lucide-react";
 import { format, formatDistanceToNow, isPast } from "date-fns";
+import { logVehicleEvent } from "@/lib/vehicleHistory";
 
 interface Transfer {
   id: string;
@@ -137,6 +138,14 @@ export default function PendingTransfers({ userEmail, onTransferAccepted }: Pend
 
       if (transferError) throw transferError;
 
+      // Log history event
+      await logVehicleEvent({
+        vehicleId: transfer.vehicle_id,
+        eventType: "transfer_accepted",
+        description: `Ownership transferred from previous owner`,
+        metadata: { transferId: transfer.id },
+      });
+
       toast({
         title: "Transfer accepted!",
         description: `${transfer.vehicle?.registration_number} has been added to your account.`,
@@ -166,6 +175,14 @@ export default function PendingTransfers({ userEmail, onTransferAccepted }: Pend
 
       if (error) throw error;
 
+      // Log history event
+      await logVehicleEvent({
+        vehicleId: transfer.vehicle_id,
+        eventType: "transfer_rejected",
+        description: `Transfer request rejected`,
+        metadata: { transferId: transfer.id },
+      });
+
       toast({
         title: "Transfer rejected",
         description: "The transfer request has been rejected.",
@@ -193,6 +210,14 @@ export default function PendingTransfers({ userEmail, onTransferAccepted }: Pend
         .eq("id", transfer.id);
 
       if (error) throw error;
+
+      // Log history event
+      await logVehicleEvent({
+        vehicleId: transfer.vehicle_id,
+        eventType: "transfer_cancelled",
+        description: `Transfer request cancelled`,
+        metadata: { transferId: transfer.id },
+      });
 
       toast({
         title: "Transfer cancelled",
