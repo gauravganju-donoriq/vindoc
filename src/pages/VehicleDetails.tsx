@@ -29,6 +29,7 @@ import VehicleHistory from "@/components/vehicle/VehicleHistory";
 import DocumentAnalysisModal from "@/components/vehicle/DocumentAnalysisModal";
 import UploadConsentDialog from "@/components/vehicle/UploadConsentDialog";
 import VehicleVerificationSection from "@/components/vehicle/VehicleVerificationSection";
+import VehicleProfileImage from "@/components/vehicle/VehicleProfileImage";
 import { logVehicleEvent } from "@/lib/vehicleHistory";
 
 interface Vehicle {
@@ -749,9 +750,15 @@ const VehicleDetails = () => {
           <CardHeader>
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-primary/10 rounded-lg">
-                  <Car className="h-8 w-8 text-primary" />
-                </div>
+                {vehicle.verification_photo_path ? (
+                  <div className="relative w-20 h-20 rounded-lg overflow-hidden border-2 border-primary/20 shadow-md">
+                    <VehicleProfileImage filePath={vehicle.verification_photo_path} />
+                  </div>
+                ) : (
+                  <div className="p-3 bg-primary/10 rounded-lg">
+                    <Car className="h-8 w-8 text-primary" />
+                  </div>
+                )}
                 <div>
                   <div className="flex items-center gap-3 mb-1">
                     <CardTitle className="text-2xl font-mono">{vehicle.registration_number}</CardTitle>
