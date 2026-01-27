@@ -36,14 +36,14 @@ serve(async (req) => {
 
     console.log(`Fetching vehicle details for: ${registrationNumber}`);
 
-    const response = await fetch('https://vehicle-rc-information-v2.p.rapidapi.com/vehicleRc', {
+    const response = await fetch('https://vehicle-rc-information-v2.p.rapidapi.com/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-rapidapi-host': 'vehicle-rc-information-v2.p.rapidapi.com',
         'x-rapidapi-key': rapidApiKey,
       },
-      body: JSON.stringify({ vehicleNumber: registrationNumber }),
+      body: JSON.stringify({ vehicle_number: registrationNumber }),
     });
 
     const data = await response.json();
