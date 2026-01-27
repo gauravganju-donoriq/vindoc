@@ -18,15 +18,28 @@ export function AdminUsers() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const fetchWithRetry = async (maxRetries = 2) => {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const { data, error: fnError } = await supabase.functions.invoke(
+            "admin-data",
+            { body: { type: "users" } }
+          );
+
+          if (fnError) throw fnError;
+          return data?.users || [];
+        } catch (err) {
+          if (attempt === maxRetries) throw err;
+          console.log(`Users fetch attempt ${attempt + 1} failed, retrying...`);
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+    };
+
     const fetchUsers = async () => {
       try {
-        const { data, error: fnError } = await supabase.functions.invoke(
-          "admin-data",
-          { body: { type: "users" } }
-        );
-
-        if (fnError) throw fnError;
-        setUsers(data?.users || []);
+        const usersData = await fetchWithRetry();
+        setUsers(usersData);
       } catch (err: any) {
         console.error("Failed to fetch users:", err);
         setError(err.message || "Failed to load users");

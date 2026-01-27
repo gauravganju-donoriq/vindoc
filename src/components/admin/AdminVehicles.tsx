@@ -25,16 +25,29 @@ export function AdminVehicles() {
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
+    const fetchWithRetry = async (maxRetries = 2) => {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const { data, error: fnError } = await supabase.functions.invoke(
+            "admin-data",
+            { body: { type: "vehicles" } }
+          );
+
+          if (fnError) throw fnError;
+          return data?.vehicles || [];
+        } catch (err) {
+          if (attempt === maxRetries) throw err;
+          console.log(`Vehicles fetch attempt ${attempt + 1} failed, retrying...`);
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+    };
+
     const fetchVehicles = async () => {
       try {
-        const { data, error: fnError } = await supabase.functions.invoke(
-          "admin-data",
-          { body: { type: "vehicles" } }
-        );
-
-        if (fnError) throw fnError;
-        setVehicles(data?.vehicles || []);
-        setFilteredVehicles(data?.vehicles || []);
+        const vehiclesData = await fetchWithRetry();
+        setVehicles(vehiclesData);
+        setFilteredVehicles(vehiclesData);
       } catch (err: any) {
         console.error("Failed to fetch vehicles:", err);
         setError(err.message || "Failed to load vehicles");
