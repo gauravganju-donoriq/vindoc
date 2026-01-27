@@ -39,16 +39,15 @@ serve(async (req) => {
 
     const requestBody = JSON.stringify({ vehicle_number: registrationNumber });
     
-    // Use plain object format for headers as per RapidAPI documentation
-
     console.log('Making request to RapidAPI...');
+    console.log('Request body:', requestBody);
     
     const response = await fetch('https://vehicle-rc-information-v2.p.rapidapi.com/', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'x-rapidapi-key': rapidApiKey,
-        'x-rapidapi-host': 'vehicle-rc-information-v2.p.rapidapi.com'
+        'x-rapidapi-host': 'vehicle-rc-information-v2.p.rapidapi.com',
+        'Content-Type': 'application/json'
       },
       body: requestBody,
     });
