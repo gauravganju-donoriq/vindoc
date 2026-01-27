@@ -1,157 +1,218 @@
 
-# Detailed Vehicle Profile Page
+# Unique Vehicle Registration & Controlled Data Refresh
 
 ## Overview
-Enhance the existing VehicleDetails page to display all vehicle fields in an organized, sectioned layout. The page will present comprehensive vehicle information that's useful for both document tracking and potential resale purposes.
+This plan addresses two key requirements:
+1. **Prevent duplicate vehicles across accounts** - A registration number can only exist once in the entire system
+2. **48-hour refresh cooldown** - Vehicle data can only be manually refreshed after 48 hours from the last update
 
-## Page Structure
+---
 
-The profile will be organized into 6 distinct sections:
+## Feature 1: Unique Vehicle Registration (System-Wide)
+
+### Current State
+- The database has NO unique constraint on `registration_number` currently
+- Error code `23505` is handled in AddVehicle.tsx but the message says "already in your account" (per-user scope)
+- Any user can add the same vehicle multiple times
+
+### Proposed Solution
+
+**Database Changes:**
+- Add a UNIQUE constraint on `registration_number` column in the `vehicles` table
+- This enforces system-wide uniqueness at the database level
+
+**Frontend Changes (AddVehicle.tsx):**
+- Update error message when error code `23505` is detected
+- New message: "This vehicle is already registered in the system by another user"
+- Add a pre-check before saving to provide immediate feedback
+
+**User Experience Flow:**
+```text
+User enters registration number
+        |
+        v
+[Click "Save Vehicle"]
+        |
+        v
+Database checks uniqueness
+        |
+    +---+---+
+    |       |
+ Unique   Duplicate
+    |       |
+    v       v
+ Saved   Error: "This vehicle is 
+         already registered"
+```
+
+### Pros & Cons
+
+| Pros | Cons |
+|------|------|
+| Ensures data integrity - one vehicle, one owner | Vehicle can get "stuck" if user abandons account |
+| Prevents abuse/spam of the API | Legitimate transfer of ownership requires deletion first |
+| Database-level enforcement is secure | User can't verify ownership before claiming |
+| Simple implementation | No ownership transfer workflow |
+
+### Recommendation
+The unique constraint is the right approach. For the edge case of legitimate ownership transfers, users would need to:
+1. Previous owner deletes the vehicle from their account, OR
+2. Contact support for manual transfer (future enhancement)
+
+---
+
+## Feature 2: Controlled Data Refresh with 48-Hour Cooldown
+
+### Current State
+- Vehicle data is fetched once during "Add Vehicle"
+- No mechanism exists to refresh/update vehicle data
+- No tracking of when data was last fetched
+
+### Proposed Solution
+
+**Database Changes:**
+- Add `data_last_fetched_at` (timestamp) column to track when API data was last retrieved
+- This timestamp is set when:
+  - Vehicle is first added with fetched data
+  - User manually triggers a refresh
+
+**VehicleDetails Page Changes:**
+- Add "Refresh Vehicle Data" button in the header area
+- Button shows countdown timer when disabled (time until next refresh)
+- Button is enabled only after 48 hours have passed
+- Display "Last updated: [date/time]" near the vehicle header
+
+**Edge Function Changes:**
+- Create a new edge function or modify existing one to support "refresh mode"
+- Update the vehicle record with fresh data and set the timestamp
+
+**Refresh Button States:**
 
 ```text
 +------------------------------------------+
-|  Header: Registration + Quick Status     |
+|  State 1: Recently Updated               |
+|  [Refresh Data] (disabled, grayed out)   |
+|  "Can refresh in 47h 23m"                |
 +------------------------------------------+
-|  Section 1: Vehicle Identity             |
-|  - Reg Number, Make/Model, Color, etc.   |
+
 +------------------------------------------+
-|  Section 2: Technical Specifications     |
-|  - Engine, CC, Seats, Weight, etc.       |
+|  State 2: Ready to Refresh               |
+|  [🔄 Refresh Data] (enabled, primary)    |
+|  "Last updated 3 days ago"               |
 +------------------------------------------+
-|  Section 3: Ownership & Finance          |
-|  - Owner, Count, Finance Status, NOC     |
+
 +------------------------------------------+
-|  Section 4: Document Expiry Status       |
-|  - Insurance, PUCC, Fitness, Road Tax    |
-+------------------------------------------+
-|  Section 5: Document Repository          |
-|  - Upload & manage documents             |
+|  State 3: Refreshing                     |
+|  [⏳ Refreshing...] (disabled, loading)  |
 +------------------------------------------+
 ```
 
-## Detailed Sections
+### Workflow Diagram
 
-### 1. Header Card (Enhanced)
-- Large registration number display with RC status badge
-- Manufacturer + Model as subtitle
-- Quick summary: Fuel type, Year registered, Owner count
-- Visual icon representing vehicle class
+```text
+User opens VehicleDetails
+        |
+        v
+Check data_last_fetched_at
+        |
+    +---+---+
+    |       |
+ <48hrs   >=48hrs
+    |       |
+    v       v
+ Disable   Enable
+ Button    Button
+    |       |
+    +---+---+
+        |
+    [User clicks "Refresh"]
+        |
+        v
+    Call edge function
+        |
+        v
+    Fetch from RapidAPI
+        |
+        v
+    Update vehicle record
+    + set data_last_fetched_at = NOW()
+        |
+        v
+    Refresh UI with new data
+```
 
-### 2. Vehicle Identity Section
-| Field | Description |
-|-------|-------------|
-| Registration Number | Primary identifier |
-| Manufacturer | Brand name (e.g., BMW INDIA PVT LTD) |
-| Model | Maker/model name |
-| Vehicle Class | Type classification |
-| Vehicle Category | Category classification |
-| Body Type | Sedan, SUV, Hatchback, etc. |
-| Color | Vehicle color |
-| Registration Date | Initial registration |
-| RC Status | Active/Inactive status with badge |
+### Pros & Cons
 
-### 3. Technical Specifications Section
-| Field | Description |
-|-------|-------------|
-| Engine Number | Engine identification |
-| Chassis Number | Chassis identification |
-| Cubic Capacity | Engine CC |
-| Fuel Type | Petrol/Diesel/CNG/Electric |
-| Seating Capacity | Number of seats |
-| Emission Norms | BS-IV, BS-VI, etc. |
-| Wheelbase | If available |
-| Gross Vehicle Weight | If available |
-| Unladen Weight | If available |
+| Pros | Cons |
+|------|------|
+| Reduces unnecessary API calls | User can't get immediate updates if data changes |
+| Saves RapidAPI costs | 48 hours may be too long for time-sensitive updates |
+| User has control over when to refresh | Adds complexity to the UI |
+| Prevents accidental data overwrites | Manual entry users may see stale data |
 
-### 4. Ownership & Finance Section
-| Field | Description |
-|-------|-------------|
-| Owner Name | Current registered owner |
-| Owner Count | Number of previous owners |
-| Finance Status | Financed/Not Financed with badge |
-| Financer Name | If financed |
-| NOC Details | No Objection Certificate status |
+### Edge Cases Handled
+1. **Vehicle added manually (no API fetch)**: `data_last_fetched_at` remains NULL, button shows "Never fetched - Refresh Now"
+2. **API fetch fails during refresh**: Keep old data, show error, don't update timestamp
+3. **Very old data**: Show warning if data is older than 30 days
 
-### 5. Document Expiry Status (Already exists, will enhance)
-- Insurance expiry with company name
-- PUCC validity
-- Fitness certificate validity
-- Road tax validity
-- Each with visual status badges (Valid/Expiring/Expired)
+---
 
-### 6. Document Repository (Keep existing)
-- Document upload functionality
-- List of uploaded documents
-- Download and delete actions
+## Implementation Details
 
-## Technical Implementation
+### Step 1: Database Migration
+```sql
+-- Add unique constraint on registration_number
+ALTER TABLE public.vehicles
+ADD CONSTRAINT vehicles_registration_number_unique 
+UNIQUE (registration_number);
 
-### File Changes
-**`src/pages/VehicleDetails.tsx`** - Major update:
+-- Add timestamp column for tracking last fetch
+ALTER TABLE public.vehicles
+ADD COLUMN IF NOT EXISTS data_last_fetched_at 
+TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+```
 
-1. **Update Vehicle Interface**
-   - Add all new fields from the database schema:
-   ```
-   engine_number, chassis_number, color, seating_capacity,
-   cubic_capacity, owner_count, emission_norms, is_financed,
-   financer, noc_details, vehicle_category, body_type,
-   wheelbase, gross_vehicle_weight, unladen_weight
-   ```
+### Step 2: Update AddVehicle.tsx
+- Set `data_last_fetched_at = NOW()` when saving with fetched data
+- Leave it NULL for manual entries
+- Update duplicate error message to reflect system-wide uniqueness
 
-2. **Create Reusable DetailItem Component**
-   - Clean display of label/value pairs
-   - Handles null/undefined values gracefully
+### Step 3: Create refresh-vehicle-data Edge Function
+- Accept vehicle ID as parameter
+- Validate user owns the vehicle
+- Check 48-hour cooldown server-side (defense in depth)
+- Fetch fresh data from RapidAPI
+- Update vehicle record + timestamp
+- Return updated data
 
-3. **Add Collapsible Sections**
-   - Use existing Collapsible component from shadcn
-   - Allow users to expand/collapse sections
-   - Default all sections open
+### Step 4: Update VehicleDetails.tsx
+- Add `data_last_fetched_at` to Vehicle interface
+- Add refresh button with cooldown logic
+- Show "Last updated" timestamp
+- Handle loading/error states for refresh
 
-4. **Implement Section Components**
-   - VehicleIdentitySection
-   - TechnicalSpecsSection
-   - OwnershipFinanceSection
-   - Each renders a grid of detail items
+### Step 5: Update Edge Function (fetch-vehicle-details)
+- Add support for "refresh" mode that also updates timestamp
+- Reuse existing API mapping logic
 
-5. **Visual Enhancements**
-   - Use appropriate icons for each section (Car, Settings, User, Calendar, Shield)
-   - Highlight important values (finance status, owner count)
-   - Show "Not Available" for missing data in muted style
+---
 
-### New UI Components Used
-- Existing: Card, Badge, Button, Collapsible
-- Icons: Car, Settings, User, Users, Banknote, Fuel, Calendar, Shield, FileText, Gauge, Palette
+## Files to be Modified/Created
 
-### Responsive Design
-- Single column on mobile
-- 2-column grid on tablet (sm:grid-cols-2)
-- 3-column grid on desktop for technical specs (lg:grid-cols-3)
+| File | Changes |
+|------|---------|
+| `supabase/migrations/[timestamp].sql` | Add unique constraint + new column |
+| `src/pages/AddVehicle.tsx` | Update error message, set timestamp on save |
+| `src/pages/VehicleDetails.tsx` | Add refresh button, show last updated |
+| `supabase/functions/fetch-vehicle-details/index.ts` | Add refresh mode support |
+| `src/integrations/supabase/types.ts` | Auto-updated by migration |
 
-## User Experience
+---
 
-1. **Clean Information Hierarchy**
-   - Most important info (reg number, status) at top
-   - Detailed specs organized logically
-   - Documents and expiry tracking easily accessible
+## Summary
 
-2. **Resale-Ready Information**
-   - Owner count prominently displayed
-   - Finance status clearly shown
-   - All technical specs for buyer reference
+This plan implements:
+1. **System-wide unique vehicle registration** - enforced at database level
+2. **48-hour refresh cooldown** - with clear UI feedback and server-side validation
 
-3. **Visual Status Indicators**
-   - Green badge for active/valid status
-   - Yellow badge for expiring soon
-   - Red badge for expired/issues
-
-## Implementation Order
-
-1. Update Vehicle interface with all fields
-2. Create DetailItem helper component
-3. Restructure header card with enhanced info
-4. Add Vehicle Identity section
-5. Add Technical Specifications section
-6. Add Ownership & Finance section
-7. Keep existing Document Expiry and Repository sections
-8. Add Collapsible wrappers for each section
-9. Test responsive behavior
+Both features work together to ensure data integrity while giving users control over their vehicle data updates.
