@@ -57,14 +57,25 @@ export type Database = {
       }
       vehicles: {
         Row: {
+          body_type: string | null
+          chassis_number: string | null
+          color: string | null
           created_at: string
+          cubic_capacity: number | null
+          emission_norms: string | null
+          engine_number: string | null
+          financer: string | null
           fitness_valid_upto: string | null
           fuel_type: string | null
+          gross_vehicle_weight: string | null
           id: string
           insurance_company: string | null
           insurance_expiry: string | null
+          is_financed: boolean | null
           maker_model: string | null
           manufacturer: string | null
+          noc_details: string | null
+          owner_count: number | null
           owner_name: string | null
           pucc_valid_upto: string | null
           raw_api_data: Json | null
@@ -72,19 +83,34 @@ export type Database = {
           registration_date: string | null
           registration_number: string
           road_tax_valid_upto: string | null
+          seating_capacity: number | null
+          unladen_weight: string | null
           updated_at: string
           user_id: string
+          vehicle_category: string | null
           vehicle_class: string | null
+          wheelbase: string | null
         }
         Insert: {
+          body_type?: string | null
+          chassis_number?: string | null
+          color?: string | null
           created_at?: string
+          cubic_capacity?: number | null
+          emission_norms?: string | null
+          engine_number?: string | null
+          financer?: string | null
           fitness_valid_upto?: string | null
           fuel_type?: string | null
+          gross_vehicle_weight?: string | null
           id?: string
           insurance_company?: string | null
           insurance_expiry?: string | null
+          is_financed?: boolean | null
           maker_model?: string | null
           manufacturer?: string | null
+          noc_details?: string | null
+          owner_count?: number | null
           owner_name?: string | null
           pucc_valid_upto?: string | null
           raw_api_data?: Json | null
@@ -92,19 +118,34 @@ export type Database = {
           registration_date?: string | null
           registration_number: string
           road_tax_valid_upto?: string | null
+          seating_capacity?: number | null
+          unladen_weight?: string | null
           updated_at?: string
           user_id: string
+          vehicle_category?: string | null
           vehicle_class?: string | null
+          wheelbase?: string | null
         }
         Update: {
+          body_type?: string | null
+          chassis_number?: string | null
+          color?: string | null
           created_at?: string
+          cubic_capacity?: number | null
+          emission_norms?: string | null
+          engine_number?: string | null
+          financer?: string | null
           fitness_valid_upto?: string | null
           fuel_type?: string | null
+          gross_vehicle_weight?: string | null
           id?: string
           insurance_company?: string | null
           insurance_expiry?: string | null
+          is_financed?: boolean | null
           maker_model?: string | null
           manufacturer?: string | null
+          noc_details?: string | null
+          owner_count?: number | null
           owner_name?: string | null
           pucc_valid_upto?: string | null
           raw_api_data?: Json | null
@@ -112,9 +153,13 @@ export type Database = {
           registration_date?: string | null
           registration_number?: string
           road_tax_valid_upto?: string | null
+          seating_capacity?: number | null
+          unladen_weight?: string | null
           updated_at?: string
           user_id?: string
+          vehicle_category?: string | null
           vehicle_class?: string | null
+          wheelbase?: string | null
         }
         Relationships: []
       }
