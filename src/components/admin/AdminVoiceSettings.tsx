@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Mic, Phone, Save, Loader2, CheckCircle, XCircle, Clock, PhoneOff, FileText, Play } from "lucide-react";
+import { Mic, Phone, Save, Loader2, CheckCircle, XCircle, Clock, PhoneOff, FileText, Play, RefreshCw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format, formatDistanceToNow } from "date-fns";
 
@@ -69,6 +69,7 @@ export const AdminVoiceSettings = () => {
   const [saving, setSaving] = useState(false);
   const [testCallNumber, setTestCallNumber] = useState("");
   const [makingTestCall, setMakingTestCall] = useState(false);
+  const [refreshingLogs, setRefreshingLogs] = useState(false);
   const { toast } = useToast();
 
   // Form state
@@ -421,11 +422,28 @@ export const AdminVoiceSettings = () => {
       {/* Call Logs */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Phone className="h-5 w-5" />
-            Recent Call Logs
-          </CardTitle>
-          <CardDescription>History of automated voice calls</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Phone className="h-5 w-5" />
+                Recent Call Logs
+              </CardTitle>
+              <CardDescription>History of automated voice calls</CardDescription>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={async () => {
+                setRefreshingLogs(true);
+                await fetchCallLogs();
+                setRefreshingLogs(false);
+              }}
+              disabled={refreshingLogs}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${refreshingLogs ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {callLogs.length === 0 ? (
