@@ -222,11 +222,11 @@ serve(async (req) => {
                     endpointing: 250,
                   },
                   input: {
-                    provider: "twilio",
+                    provider: "plivo",
                     format: "wav",
                   },
                   output: {
-                    provider: "twilio",
+                    provider: "plivo",
                     format: "wav",
                   },
                 },
