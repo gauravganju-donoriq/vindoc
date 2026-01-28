@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Car, Shield, Bell, FileText } from "lucide-react";
+import { Shield, FileText, Bell, Car } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Index = () => {
@@ -24,14 +24,14 @@ const Index = () => {
         <div className="text-center max-w-3xl mx-auto mb-16">
           <div className="flex justify-center mb-6">
             <div className="p-4 bg-primary/10 rounded-full">
-              <Car className="h-12 w-12 text-primary" />
+              <Shield className="h-12 w-12 text-primary" />
             </div>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            Vehicle Document Manager
+          <h1 className="text-3xl md:text-4xl font-bold mb-4">
+            Valt
           </h1>
           <p className="text-xl text-muted-foreground mb-8">
-            Track your vehicle documents, never miss an expiry date, and keep all your certificates in one secure place.
+            Your secure vault for vehicle documents, service records, and ownership transfers.
           </p>
           <div className="flex gap-4 justify-center">
             <Button size="lg" asChild>
@@ -44,7 +44,7 @@ const Index = () => {
         <div className="grid gap-6 md:grid-cols-3 max-w-5xl mx-auto">
           <Card>
             <CardHeader>
-              <Shield className="h-10 w-10 text-primary mb-2" />
+              <FileText className="h-10 w-10 text-primary mb-2" />
               <CardTitle>Document Storage</CardTitle>
               <CardDescription>
                 Securely store your insurance, RC, PUCC, and other vehicle documents in one place.
@@ -62,7 +62,7 @@ const Index = () => {
           </Card>
           <Card>
             <CardHeader>
-              <FileText className="h-10 w-10 text-primary mb-2" />
+              <Car className="h-10 w-10 text-primary mb-2" />
               <CardTitle>Auto-Fetch Details</CardTitle>
               <CardDescription>
                 Enter your registration number and automatically fetch vehicle details from official records.
