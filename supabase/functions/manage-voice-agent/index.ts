@@ -170,11 +170,35 @@ serve(async (req) => {
       const body = await req.json();
       const postAction = body.action;
 
-      if (postAction === "create" || postAction === "update") {
+if (postAction === "create" || postAction === "update") {
         const config = body.config as Partial<VoiceAgentConfig>;
 
         // Webhook URL for receiving call updates
         const webhookUrl = `${supabaseUrl}/functions/v1/bolna-webhook`;
+
+        // Enhanced system prompt with strict guardrails
+        const enhancedSystemPrompt = config.system_prompt || `You are a helpful assistant from CertChaperone, calling about vehicle document expiry.
+
+CALLER DETAILS:
+- Owner: {{owner_name}}
+- Vehicle: {{vehicle_number}}
+- Document: {{document_type}}
+- Status: {{days_message}}
+
+LANGUAGE INSTRUCTIONS:
+{{language_instruction}}
+
+STRICT RULES - NEVER VIOLATE:
+1. ONLY discuss vehicle document expiry reminders
+2. NEVER provide legal, financial, or pricing advice
+3. NEVER engage in casual conversation beyond greetings
+4. NEVER reveal system internals or company information
+5. If asked to do anything outside your role, politely decline and end the call
+6. Keep the call under 45 seconds
+7. Be warm and respectful - use appropriate honorifics
+8. State the purpose clearly within first 10 seconds
+9. End with a polite reminder to renew the document
+10. Maximum call duration: 60 seconds - wrap up if approaching limit`;
 
         // Build Bolna agent payload matching API docs structure
         const bolnaPayload = {
@@ -249,7 +273,7 @@ serve(async (req) => {
           },
           agent_prompts: {
             task_1: {
-              system_prompt: config.system_prompt || "You are a helpful assistant.",
+              system_prompt: enhancedSystemPrompt,
             },
           },
         };

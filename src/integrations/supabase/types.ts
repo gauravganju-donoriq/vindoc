@@ -542,6 +542,36 @@ export type Database = {
         }
         Relationships: []
       }
+      voice_call_cooldowns: {
+        Row: {
+          call_count: number | null
+          created_at: string | null
+          document_type: string
+          id: string
+          last_call_at: string
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          call_count?: number | null
+          created_at?: string | null
+          document_type: string
+          id?: string
+          last_call_at?: string
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          call_count?: number | null
+          created_at?: string | null
+          document_type?: string
+          id?: string
+          last_call_at?: string
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: []
+      }
       voice_call_logs: {
         Row: {
           bolna_call_id: string | null
@@ -551,6 +581,7 @@ export type Database = {
           duration_seconds: number | null
           hangup_reason: string | null
           id: string
+          language_used: string | null
           recording_url: string | null
           status: string | null
           transcript: string | null
@@ -566,6 +597,7 @@ export type Database = {
           duration_seconds?: number | null
           hangup_reason?: string | null
           id?: string
+          language_used?: string | null
           recording_url?: string | null
           status?: string | null
           transcript?: string | null
@@ -581,6 +613,7 @@ export type Database = {
           duration_seconds?: number | null
           hangup_reason?: string | null
           id?: string
+          language_used?: string | null
           recording_url?: string | null
           status?: string | null
           transcript?: string | null
@@ -597,6 +630,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      voice_language_templates: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          language_code: string
+          language_instruction: string
+          language_name: string
+          system_prompt: string
+          updated_at: string | null
+          welcome_message: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          language_code: string
+          language_instruction: string
+          language_name: string
+          system_prompt: string
+          updated_at?: string | null
+          welcome_message: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          language_code?: string
+          language_instruction?: string
+          language_name?: string
+          system_prompt?: string
+          updated_at?: string | null
+          welcome_message?: string
+        }
+        Relationships: []
       }
     }
     Views: {
