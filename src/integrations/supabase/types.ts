@@ -549,8 +549,12 @@ export type Database = {
           created_at: string | null
           document_type: string | null
           duration_seconds: number | null
+          hangup_reason: string | null
           id: string
+          recording_url: string | null
           status: string | null
+          transcript: string | null
+          updated_at: string | null
           user_id: string
           vehicle_id: string | null
         }
@@ -560,8 +564,12 @@ export type Database = {
           created_at?: string | null
           document_type?: string | null
           duration_seconds?: number | null
+          hangup_reason?: string | null
           id?: string
+          recording_url?: string | null
           status?: string | null
+          transcript?: string | null
+          updated_at?: string | null
           user_id: string
           vehicle_id?: string | null
         }
@@ -571,8 +579,12 @@ export type Database = {
           created_at?: string | null
           document_type?: string | null
           duration_seconds?: number | null
+          hangup_reason?: string | null
           id?: string
+          recording_url?: string | null
           status?: string | null
+          transcript?: string | null
+          updated_at?: string | null
           user_id?: string
           vehicle_id?: string | null
         }

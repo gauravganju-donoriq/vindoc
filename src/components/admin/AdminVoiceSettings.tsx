@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Mic, Phone, Save, Loader2, CheckCircle, XCircle, Clock, PhoneOff } from "lucide-react";
+import { Mic, Phone, Save, Loader2, CheckCircle, XCircle, Clock, PhoneOff, FileText, Play } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format, formatDistanceToNow } from "date-fns";
 
 interface VoiceAgentConfig {
@@ -39,6 +40,9 @@ interface CallLog {
   duration_seconds: number | null;
   created_at: string;
   vehicles: { registration_number: string } | null;
+  transcript: string | null;
+  recording_url: string | null;
+  hangup_reason: string | null;
 }
 
 const VOICE_PROVIDERS = [
@@ -437,6 +441,8 @@ export const AdminVoiceSettings = () => {
                   <TableHead>Vehicle</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Duration</TableHead>
+                  <TableHead>Transcript</TableHead>
+                  <TableHead>Recording</TableHead>
                   <TableHead>Time</TableHead>
                 </TableRow>
               </TableHeader>
@@ -454,6 +460,48 @@ export const AdminVoiceSettings = () => {
                     <TableCell className="capitalize">{log.call_type.replace("_", " ")}</TableCell>
                     <TableCell>
                       {log.duration_seconds ? `${log.duration_seconds}s` : "-"}
+                    </TableCell>
+                    <TableCell>
+                      {log.transcript ? (
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 px-2">
+                              <FileText className="h-4 w-4 mr-1" />
+                              View
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle>Call Transcript</DialogTitle>
+                            </DialogHeader>
+                            <div className="whitespace-pre-wrap text-sm bg-muted p-4 rounded-lg">
+                              {log.transcript}
+                            </div>
+                            {log.hangup_reason && (
+                              <div className="text-sm text-muted-foreground mt-2">
+                                <span className="font-medium">Hangup Reason:</span> {log.hangup_reason}
+                              </div>
+                            )}
+                          </DialogContent>
+                        </Dialog>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {log.recording_url ? (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 px-2"
+                          onClick={() => window.open(log.recording_url!, '_blank')}
+                        >
+                          <Play className="h-4 w-4 mr-1" />
+                          Play
+                        </Button>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}

@@ -368,7 +368,7 @@ serve(async (req) => {
           );
         }
 
-        // Make test call
+        // Make test call with Indian caller ID
         console.log("Making test call to:", phoneNumber);
         const callResponse = await fetch(`${BOLNA_API_BASE}/call`, {
           method: "POST",
@@ -379,6 +379,7 @@ serve(async (req) => {
           body: JSON.stringify({
             agent_id: config.bolna_agent_id,
             recipient_phone_number: phoneNumber,
+            from_phone_number: "+918035452070",
             user_data: {
               owner_name: "Admin",
               vehicle_number: "KL01XX0000",
