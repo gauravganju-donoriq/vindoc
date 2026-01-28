@@ -396,7 +396,7 @@ export const AdminVoiceSettings = () => {
 
             <div className="flex items-center gap-2">
               <Input
-                placeholder="+91 9876543210"
+                placeholder="+91 9633633400"
                 value={testCallNumber}
                 onChange={(e) => setTestCallNumber(e.target.value)}
                 className="w-48"
