@@ -491,6 +491,57 @@ export type Database = {
         }
         Relationships: []
       }
+      voice_agent_config: {
+        Row: {
+          agent_name: string
+          bolna_agent_id: string | null
+          call_terminate_seconds: number | null
+          created_at: string | null
+          hangup_after_silence: number | null
+          id: string
+          is_active: boolean | null
+          language: string
+          system_prompt: string
+          updated_at: string | null
+          voice_id: string | null
+          voice_name: string | null
+          voice_provider: string
+          welcome_message: string
+        }
+        Insert: {
+          agent_name?: string
+          bolna_agent_id?: string | null
+          call_terminate_seconds?: number | null
+          created_at?: string | null
+          hangup_after_silence?: number | null
+          id?: string
+          is_active?: boolean | null
+          language?: string
+          system_prompt: string
+          updated_at?: string | null
+          voice_id?: string | null
+          voice_name?: string | null
+          voice_provider?: string
+          welcome_message: string
+        }
+        Update: {
+          agent_name?: string
+          bolna_agent_id?: string | null
+          call_terminate_seconds?: number | null
+          created_at?: string | null
+          hangup_after_silence?: number | null
+          id?: string
+          is_active?: boolean | null
+          language?: string
+          system_prompt?: string
+          updated_at?: string | null
+          voice_id?: string | null
+          voice_name?: string | null
+          voice_provider?: string
+          welcome_message?: string
+        }
+        Relationships: []
+      }
       voice_call_logs: {
         Row: {
           bolna_call_id: string | null
