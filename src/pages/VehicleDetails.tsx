@@ -916,10 +916,18 @@ const VehicleDetails = () => {
 
         {/* Tabs */}
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="w-full justify-start bg-background border border-border rounded-lg h-auto p-1 mb-6">
+          <TabsList className="w-full justify-start bg-background border border-border rounded-lg h-auto p-1 mb-6 flex-wrap">
             <TabsTrigger value="overview" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <LayoutGrid className="h-4 w-4" />
               <span className="hidden sm:inline">Overview</span>
+            </TabsTrigger>
+            <TabsTrigger value="specifications" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <Car className="h-4 w-4" />
+              <span className="hidden sm:inline">Specifications</span>
+            </TabsTrigger>
+            <TabsTrigger value="ownership" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <User className="h-4 w-4" />
+              <span className="hidden sm:inline">Ownership</span>
             </TabsTrigger>
             <TabsTrigger value="verification" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <Shield className="h-4 w-4" />
@@ -939,310 +947,312 @@ const VehicleDetails = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Overview Tab */}
+          {/* Overview Tab - Expiry Intelligence Only */}
           <TabsContent value="overview" className="mt-0">
-            <div className="space-y-6">
-              {/* Expiry Intelligence - Top of Overview */}
-              <ExpiryIntelligence vehicle={vehicle} />
+            <ExpiryIntelligence vehicle={vehicle} />
+          </TabsContent>
 
-              <div className="grid gap-6 lg:grid-cols-2">
-                {/* Vehicle Identity */}
-                <div className="bg-background border border-border rounded-lg p-6">
-                  <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
-                    <Car className="h-5 w-5 text-muted-foreground" />
-                    Vehicle Identity
-                  </h3>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <DetailItem label="Registration Number" value={vehicle.registration_number} />
-                    <EditableDetailItem
-                      label="Manufacturer"
-                      value={getCurrentValue("manufacturer")}
-                      fieldName="manufacturer"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      normalize
-                    />
-                    <EditableDetailItem
-                      label="Model"
-                      value={getCurrentValue("maker_model")}
-                      fieldName="maker_model"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      normalize
-                    />
-                    <EditableDetailItem
-                      label="Vehicle Class"
-                      value={getCurrentValue("vehicle_class")}
-                      fieldName="vehicle_class"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                    />
-                    <EditableDetailItem
-                      label="Vehicle Category"
-                      value={getCurrentValue("vehicle_category")}
-                      fieldName="vehicle_category"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                    />
-                    <EditableDetailItem
-                      label="Body Type"
-                      value={getCurrentValue("body_type")}
-                      fieldName="body_type"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                    />
-                    <EditableDetailItem
-                      label="Color"
-                      value={getCurrentValue("color")}
-                      fieldName="color"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      normalize
-                    />
-                    <EditableDetailItem
-                      label="Registration Date"
-                      value={getCurrentValue("registration_date")}
-                      fieldName="registration_date"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      inputType="date"
-                    />
-                    <div className="space-y-1">
-                      <span className="text-sm text-muted-foreground">RC Status</span>
-                      <div>
-                        {vehicle.rc_status ? (
-                          <Badge variant={vehicle.rc_status === "ACTIVE" ? "default" : "destructive"}>
-                            {vehicle.rc_status}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground italic">Not Available</span>
-                        )}
-                      </div>
+          {/* Specifications Tab - Vehicle Identity + Technical Specs */}
+          <TabsContent value="specifications" className="mt-0">
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Vehicle Identity */}
+              <div className="bg-background border border-border rounded-lg p-6">
+                <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
+                  <Car className="h-5 w-5 text-muted-foreground" />
+                  Vehicle Identity
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <DetailItem label="Registration Number" value={vehicle.registration_number} />
+                  <EditableDetailItem
+                    label="Manufacturer"
+                    value={getCurrentValue("manufacturer")}
+                    fieldName="manufacturer"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    normalize
+                  />
+                  <EditableDetailItem
+                    label="Model"
+                    value={getCurrentValue("maker_model")}
+                    fieldName="maker_model"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    normalize
+                  />
+                  <EditableDetailItem
+                    label="Vehicle Class"
+                    value={getCurrentValue("vehicle_class")}
+                    fieldName="vehicle_class"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                  />
+                  <EditableDetailItem
+                    label="Vehicle Category"
+                    value={getCurrentValue("vehicle_category")}
+                    fieldName="vehicle_category"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                  />
+                  <EditableDetailItem
+                    label="Body Type"
+                    value={getCurrentValue("body_type")}
+                    fieldName="body_type"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                  />
+                  <EditableDetailItem
+                    label="Color"
+                    value={getCurrentValue("color")}
+                    fieldName="color"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    normalize
+                  />
+                  <EditableDetailItem
+                    label="Registration Date"
+                    value={getCurrentValue("registration_date")}
+                    fieldName="registration_date"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    inputType="date"
+                  />
+                  <div className="space-y-1">
+                    <span className="text-sm text-muted-foreground">RC Status</span>
+                    <div>
+                      {vehicle.rc_status ? (
+                        <Badge variant={vehicle.rc_status === "ACTIVE" ? "default" : "destructive"}>
+                          {vehicle.rc_status}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground italic">Not Available</span>
+                      )}
                     </div>
-                  </div>
-                </div>
-
-                {/* Technical Specifications */}
-                <div className="bg-background border border-border rounded-lg p-6">
-                  <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
-                    <Settings className="h-5 w-5 text-muted-foreground" />
-                    Technical Specifications
-                  </h3>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <EditableDetailItem
-                      label="Engine Number"
-                      value={getCurrentValue("engine_number")}
-                      fieldName="engine_number"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      icon={<Hash className="h-3.5 w-3.5" />}
-                    />
-                    <EditableDetailItem
-                      label="Chassis Number"
-                      value={getCurrentValue("chassis_number")}
-                      fieldName="chassis_number"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      icon={<Hash className="h-3.5 w-3.5" />}
-                    />
-                    <EditableDetailItem
-                      label="Cubic Capacity (cc)"
-                      value={getCurrentValue("cubic_capacity")}
-                      fieldName="cubic_capacity"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      inputType="number"
-                      icon={<Gauge className="h-3.5 w-3.5" />}
-                    />
-                    <EditableDetailItem
-                      label="Fuel Type"
-                      value={getCurrentValue("fuel_type")}
-                      fieldName="fuel_type"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      icon={<Fuel className="h-3.5 w-3.5" />}
-                    />
-                    <EditableDetailItem
-                      label="Seating Capacity"
-                      value={getCurrentValue("seating_capacity")}
-                      fieldName="seating_capacity"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      inputType="number"
-                      icon={<Users className="h-3.5 w-3.5" />}
-                    />
-                    <EditableDetailItem
-                      label="Emission Norms"
-                      value={getCurrentValue("emission_norms")}
-                      fieldName="emission_norms"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      icon={<FileCheck className="h-3.5 w-3.5" />}
-                    />
-                    <EditableDetailItem
-                      label="Wheelbase"
-                      value={getCurrentValue("wheelbase")}
-                      fieldName="wheelbase"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      icon={<Weight className="h-3.5 w-3.5" />}
-                    />
-                    <EditableDetailItem
-                      label="Gross Vehicle Weight"
-                      value={getCurrentValue("gross_vehicle_weight")}
-                      fieldName="gross_vehicle_weight"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      icon={<Weight className="h-3.5 w-3.5" />}
-                    />
-                    <EditableDetailItem
-                      label="Unladen Weight"
-                      value={getCurrentValue("unladen_weight")}
-                      fieldName="unladen_weight"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      icon={<Weight className="h-3.5 w-3.5" />}
-                    />
                   </div>
                 </div>
               </div>
 
-              {/* Right Column */}
-              <div className="space-y-6">
-                {/* Ownership & Finance */}
-                <div className="bg-background border border-border rounded-lg p-6">
-                  <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
-                    <User className="h-5 w-5 text-muted-foreground" />
-                    Ownership & Finance
-                  </h3>
+              {/* Technical Specifications */}
+              <div className="bg-background border border-border rounded-lg p-6">
+                <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
+                  <Settings className="h-5 w-5 text-muted-foreground" />
+                  Technical Specifications
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <EditableDetailItem
+                    label="Engine Number"
+                    value={getCurrentValue("engine_number")}
+                    fieldName="engine_number"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    icon={<Hash className="h-3.5 w-3.5" />}
+                  />
+                  <EditableDetailItem
+                    label="Chassis Number"
+                    value={getCurrentValue("chassis_number")}
+                    fieldName="chassis_number"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    icon={<Hash className="h-3.5 w-3.5" />}
+                  />
+                  <EditableDetailItem
+                    label="Cubic Capacity (cc)"
+                    value={getCurrentValue("cubic_capacity")}
+                    fieldName="cubic_capacity"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    inputType="number"
+                    icon={<Gauge className="h-3.5 w-3.5" />}
+                  />
+                  <EditableDetailItem
+                    label="Fuel Type"
+                    value={getCurrentValue("fuel_type")}
+                    fieldName="fuel_type"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    icon={<Fuel className="h-3.5 w-3.5" />}
+                  />
+                  <EditableDetailItem
+                    label="Seating Capacity"
+                    value={getCurrentValue("seating_capacity")}
+                    fieldName="seating_capacity"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    inputType="number"
+                    icon={<Users className="h-3.5 w-3.5" />}
+                  />
+                  <EditableDetailItem
+                    label="Emission Norms"
+                    value={getCurrentValue("emission_norms")}
+                    fieldName="emission_norms"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    icon={<FileCheck className="h-3.5 w-3.5" />}
+                  />
+                  <EditableDetailItem
+                    label="Wheelbase"
+                    value={getCurrentValue("wheelbase")}
+                    fieldName="wheelbase"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    icon={<Weight className="h-3.5 w-3.5" />}
+                  />
+                  <EditableDetailItem
+                    label="Gross Vehicle Weight"
+                    value={getCurrentValue("gross_vehicle_weight")}
+                    fieldName="gross_vehicle_weight"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    icon={<Weight className="h-3.5 w-3.5" />}
+                  />
+                  <EditableDetailItem
+                    label="Unladen Weight"
+                    value={getCurrentValue("unladen_weight")}
+                    fieldName="unladen_weight"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    icon={<Weight className="h-3.5 w-3.5" />}
+                  />
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Ownership Tab - Ownership & Finance + Document Expiry Status */}
+          <TabsContent value="ownership" className="mt-0">
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Ownership & Finance */}
+              <div className="bg-background border border-border rounded-lg p-6">
+                <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
+                  <User className="h-5 w-5 text-muted-foreground" />
+                  Ownership & Finance
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <EditableDetailItem
+                    label="Owner Name"
+                    value={getCurrentValue("owner_name")}
+                    fieldName="owner_name"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    icon={<User className="h-3.5 w-3.5" />}
+                    normalize
+                  />
+                  <EditableDetailItem
+                    label="Owner Count"
+                    value={getCurrentValue("owner_count")}
+                    fieldName="owner_count"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    inputType="number"
+                    icon={<Users className="h-3.5 w-3.5" />}
+                  />
+                  <div className="space-y-1">
+                    <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                      <Banknote className="h-3.5 w-3.5" />
+                      Finance Status
+                    </span>
+                    <div>
+                      <Badge variant={vehicle.is_financed ? "destructive" : "default"}>
+                        {vehicle.is_financed ? "Financed" : "Not Financed"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <EditableDetailItem
+                    label="Financer"
+                    value={getCurrentValue("financer")}
+                    fieldName="financer"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    icon={<Banknote className="h-3.5 w-3.5" />}
+                    normalize
+                  />
+                  <EditableDetailItem
+                    label="NOC Details"
+                    value={getCurrentValue("noc_details")}
+                    fieldName="noc_details"
+                    isEditing={isEditing}
+                    onChange={handleFieldChange}
+                    icon={<FileCheck className="h-3.5 w-3.5" />}
+                  />
+                </div>
+              </div>
+
+              {/* Document Expiry Status */}
+              <div className="bg-background border border-border rounded-lg p-6">
+                <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
+                  <Calendar className="h-5 w-5 text-muted-foreground" />
+                  Document Expiry Status
+                </h3>
+                {isEditing ? (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <EditableDetailItem
-                      label="Owner Name"
-                      value={getCurrentValue("owner_name")}
-                      fieldName="owner_name"
+                      label="Insurance Expiry"
+                      value={getCurrentValue("insurance_expiry")}
+                      fieldName="insurance_expiry"
                       isEditing={isEditing}
                       onChange={handleFieldChange}
-                      icon={<User className="h-3.5 w-3.5" />}
+                      inputType="date"
+                    />
+                    <EditableDetailItem
+                      label="Insurance Company"
+                      value={getCurrentValue("insurance_company")}
+                      fieldName="insurance_company"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
                       normalize
                     />
                     <EditableDetailItem
-                      label="Owner Count"
-                      value={getCurrentValue("owner_count")}
-                      fieldName="owner_count"
+                      label="PUCC Valid Until"
+                      value={getCurrentValue("pucc_valid_upto")}
+                      fieldName="pucc_valid_upto"
                       isEditing={isEditing}
                       onChange={handleFieldChange}
-                      inputType="number"
-                      icon={<Users className="h-3.5 w-3.5" />}
-                    />
-                    <div className="space-y-1">
-                      <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                        <Banknote className="h-3.5 w-3.5" />
-                        Finance Status
-                      </span>
-                      <div>
-                        <Badge variant={vehicle.is_financed ? "destructive" : "default"}>
-                          {vehicle.is_financed ? "Financed" : "Not Financed"}
-                        </Badge>
-                      </div>
-                    </div>
-                    <EditableDetailItem
-                      label="Financer"
-                      value={getCurrentValue("financer")}
-                      fieldName="financer"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      icon={<Banknote className="h-3.5 w-3.5" />}
-                      normalize
+                      inputType="date"
                     />
                     <EditableDetailItem
-                      label="NOC Details"
-                      value={getCurrentValue("noc_details")}
-                      fieldName="noc_details"
+                      label="Fitness Valid Until"
+                      value={getCurrentValue("fitness_valid_upto")}
+                      fieldName="fitness_valid_upto"
                       isEditing={isEditing}
                       onChange={handleFieldChange}
-                      icon={<FileCheck className="h-3.5 w-3.5" />}
+                      inputType="date"
+                    />
+                    <EditableDetailItem
+                      label="Road Tax Valid Until"
+                      value={getCurrentValue("road_tax_valid_upto")}
+                      fieldName="road_tax_valid_upto"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      inputType="date"
                     />
                   </div>
-                </div>
-
-                {/* Document Expiry Status */}
-                <div className="bg-background border border-border rounded-lg p-6">
-                  <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
-                    <Calendar className="h-5 w-5 text-muted-foreground" />
-                    Document Expiry Status
-                  </h3>
-                  {isEditing ? (
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <EditableDetailItem
-                        label="Insurance Expiry"
-                        value={getCurrentValue("insurance_expiry")}
-                        fieldName="insurance_expiry"
-                        isEditing={isEditing}
-                        onChange={handleFieldChange}
-                        inputType="date"
-                      />
-                      <EditableDetailItem
-                        label="Insurance Company"
-                        value={getCurrentValue("insurance_company")}
-                        fieldName="insurance_company"
-                        isEditing={isEditing}
-                        onChange={handleFieldChange}
-                        normalize
-                      />
-                      <EditableDetailItem
-                        label="PUCC Valid Until"
-                        value={getCurrentValue("pucc_valid_upto")}
-                        fieldName="pucc_valid_upto"
-                        isEditing={isEditing}
-                        onChange={handleFieldChange}
-                        inputType="date"
-                      />
-                      <EditableDetailItem
-                        label="Fitness Valid Until"
-                        value={getCurrentValue("fitness_valid_upto")}
-                        fieldName="fitness_valid_upto"
-                        isEditing={isEditing}
-                        onChange={handleFieldChange}
-                        inputType="date"
-                      />
-                      <EditableDetailItem
-                        label="Road Tax Valid Until"
-                        value={getCurrentValue("road_tax_valid_upto")}
-                        fieldName="road_tax_valid_upto"
-                        isEditing={isEditing}
-                        onChange={handleFieldChange}
-                        inputType="date"
-                      />
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {expiryItems.map((item) => {
-                        const status = getExpiryStatus(item.date);
-                        return (
-                          <div key={item.label} className="flex items-center justify-between p-3 rounded-lg border border-border">
-                            <div>
-                              <p className="font-medium text-sm">{item.label}</p>
-                              {item.date ? (
-                                <p className="text-xs text-muted-foreground">
-                                  {format(new Date(item.date), "dd MMM yyyy")}
-                                  {item.company && ` • ${item.company}`}
-                                </p>
-                              ) : (
-                                <p className="text-xs text-muted-foreground">Not available</p>
-                              )}
-                            </div>
-                            {status && (
-                              <Badge variant={status.variant} className="flex items-center gap-1">
-                                <status.icon className="h-3 w-3" />
-                                {status.label}
-                              </Badge>
+                ) : (
+                  <div className="space-y-3">
+                    {expiryItems.map((item) => {
+                      const status = getExpiryStatus(item.date);
+                      return (
+                        <div key={item.label} className="flex items-center justify-between p-3 rounded-lg border border-border">
+                          <div>
+                            <p className="font-medium text-sm">{item.label}</p>
+                            {item.date ? (
+                              <p className="text-xs text-muted-foreground">
+                                {format(new Date(item.date), "dd MMM yyyy")}
+                                {item.company && ` • ${item.company}`}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">Not available</p>
                             )}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                          {status && (
+                            <Badge variant={status.variant} className="flex items-center gap-1">
+                              <status.icon className="h-3 w-3" />
+                              {status.label}
+                            </Badge>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </TabsContent>
