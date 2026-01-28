@@ -1,194 +1,116 @@
 
-# Plan: Configure Indian Caller ID + Bolna Webhooks
 
-## Overview
-This plan addresses two key requirements:
-1. Ensure all outbound calls use your purchased Indian number (+918035452070) as the caller ID
-2. Create a webhook endpoint to receive call updates from Bolna (status, transcript, duration, recording)
+# Plan: Fix Caller ID to Use Your Purchased Indian Number
+
+## Problem Analysis
+
+Based on my investigation of the edge function logs, Bolna webhook data, and API documentation, I identified the following:
+
+### What Happened
+1. **Initially**: The code included `from_phone_number: "+918035452070"` but the agent was configured for **Twilio** (not Plivo)
+2. **Error**: Bolna returned `400 - Calling from_number doesn't exist for twilio`
+3. **Previous Fix**: Removed `from_phone_number` and changed agent to use **Plivo** provider
+4. **Current Issue**: Without `from_phone_number`, Bolna uses a **default number** (`+918035735856`) instead of your purchased number (`+918035452070`)
+
+### Evidence from Webhook Logs
+| Timestamp | From Number | Status |
+|-----------|-------------|--------|
+| 09:36:33 | +918035735856 | Wrong (default) |
+| 09:35:23 | +918035452070 | Correct (your number) |
+
+The earlier call at 09:35:23 actually used your correct number because the agent was already configured with Plivo at that point, and the `from_phone_number` was still in the code.
 
 ---
 
-## Part 1: Fix Caller ID
+## Root Cause
 
-### Problem
-Currently, calls are made without specifying the `from_phone_number` parameter, so Bolna uses their default US number.
+The Bolna `/call` API **does support** the `from_phone_number` parameter (confirmed in their official documentation). The earlier error occurred because:
 
-### Solution
-Add the `from_phone_number` parameter to all Bolna `/call` API requests.
+1. The agent was configured with **Twilio** as the telephony provider
+2. Your number (`+918035452070`) is a **Plivo** number
+3. Bolna couldn't find the number in Twilio's registry
+
+Now that the agent is configured for **Plivo**, adding back `from_phone_number` should work correctly.
+
+---
+
+## Solution
 
 ### Files to Modify
 
 **1. supabase/functions/manage-voice-agent/index.ts**
-- Add `from_phone_number: "+918035452070"` to the test call request body (around line 379-389)
-
-**2. supabase/functions/make-voice-call/index.ts**
-- Add `from_phone_number: "+918035452070"` to the production call request body (around line 115)
-
-### Code Changes
-
-```text
-// In manage-voice-agent/index.ts (test call)
+Add `from_phone_number` to the test call request (around line 383-392):
+```typescript
 body: JSON.stringify({
   agent_id: config.bolna_agent_id,
   recipient_phone_number: phoneNumber,
-  from_phone_number: "+918035452070",  // <-- ADD THIS
+  from_phone_number: "+918035452070",  // Add this back
   user_data: { ... }
 })
 ```
 
-```text
-// In make-voice-call/index.ts (production calls)
+**2. supabase/functions/make-voice-call/index.ts**
+Add `from_phone_number` to production calls (around line 118):
+```typescript
 body: JSON.stringify({
   agent_id: agentConfig.bolna_agent_id,
   recipient_phone_number: profile.phone_number,
-  from_phone_number: "+918035452070",  // <-- ADD THIS
+  from_phone_number: "+918035452070",  // Add this back
   user_data: { ... }
 })
 ```
 
 ---
 
-## Part 2: Create Webhook Endpoint
+## Implementation Steps
 
-### New Edge Function: `bolna-webhook`
-
-This function will receive call status updates from Bolna and store them in the database.
-
-**Location:** `supabase/functions/bolna-webhook/index.ts`
-
-### Webhook Payload Structure (from Bolna)
-```text
-{
-  "execution_id": "uuid",
-  "agent_id": "uuid",
-  "status": "completed|failed|no_answer|busy",
-  "conversation_time": 123,
-  "transcript": "Full conversation text...",
-  "telephony_data": {
-    "duration": 42,
-    "to_number": "+91...",
-    "from_number": "+918035452070",
-    "recording_url": "https://..."
-  }
-}
-```
-
-### Functionality
-1. Receive POST requests from Bolna
-2. Validate the request (basic signature/origin check)
-3. Find the call log by `bolna_call_id` (execution_id)
-4. Update the `voice_call_logs` record with:
-   - status (completed, failed, no_answer)
-   - duration_seconds
-   - transcript (new column needed)
-   - recording_url (new column needed)
+| Step | Action | File |
+|------|--------|------|
+| 1 | Add `from_phone_number: "+918035452070"` to test call payload | manage-voice-agent/index.ts |
+| 2 | Add `from_phone_number: "+918035452070"` to production call payload | make-voice-call/index.ts |
+| 3 | Deploy both edge functions | Automatic |
+| 4 | Test with a call from Admin panel | User action |
 
 ---
 
-## Part 3: Database Schema Update
+## Why This Will Work Now
 
-### New Columns for `voice_call_logs` Table
-
-| Column | Type | Description |
-|--------|------|-------------|
-| transcript | text | Full conversation transcript |
-| recording_url | text | URL to call recording |
-| hangup_reason | text | Why the call ended |
-| updated_at | timestamptz | Last update timestamp |
-
-### Migration SQL
-```sql
-ALTER TABLE voice_call_logs 
-ADD COLUMN IF NOT EXISTS transcript text,
-ADD COLUMN IF NOT EXISTS recording_url text,
-ADD COLUMN IF NOT EXISTS hangup_reason text,
-ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
-```
+1. **Agent Configuration**: The agent is now correctly configured with `provider: "plivo"` for both input and output
+2. **Number Registration**: Your number `+918035452070` is registered with Plivo (as shown in your screenshot)
+3. **API Support**: Bolna's `/call` API explicitly supports `from_phone_number` parameter for specifying the outbound caller ID
 
 ---
 
-## Part 4: Configuration Required in Bolna Dashboard
+## Technical Details
 
-After deployment, you will need to configure the webhook URL in your Bolna dashboard:
+### Bolna /call API Parameters (from official docs)
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| agent_id | string | Yes | Agent ID to use for the call |
+| recipient_phone_number | string | Yes | Phone number to call (E.164 format) |
+| from_phone_number | string | No | Caller ID (E.164 format) |
+| user_data | object | No | Dynamic variables for the agent |
 
-**Webhook URL to configure:**
-```
-https://zdvppjgxjyqqwrekougp.supabase.co/functions/v1/bolna-webhook
-```
+### Why It Failed Before
+The previous error `from_number doesn't exist for twilio` occurred because:
+- Agent was configured with Twilio as telephony provider
+- Your number is a Plivo number, not Twilio
+- Bolna couldn't find the number in Twilio's system
 
-**Steps in Bolna Dashboard:**
-1. Go to your agent settings
-2. Find the "Webhook" or "Server URL" section
-3. Add the above URL
-4. Ensure the IP `13.203.39.153` (Bolna's webhook source) is allowed
-
----
-
-## Part 5: Update Admin UI
-
-### Enhance Call Logs Display
-
-Add new columns to the call logs table in `AdminVoiceSettings.tsx`:
-- **Transcript**: Show a preview/expandable transcript
-- **Recording**: Add a play button or download link for recordings
-- **Hangup Reason**: Show why the call ended
-
----
-
-## Technical Architecture
-
-```text
-+-------------------+       +----------------------+
-|   Admin Panel     |       |     Bolna API        |
-|   (Test Call)     |------>|   /call endpoint     |
-+-------------------+       +----------------------+
-        |                           |
-        | from_phone_number         | Places call from
-        | "+918035452070"           | +918035452070
-        |                           v
-        |                   +---------------+
-        |                   |  User Phone   |
-        |                   +---------------+
-        |                           |
-        |                           | Call completes
-        |                           v
-        |                   +----------------------+
-        |                   |   Bolna Webhook      |
-        |                   |   (POST to us)       |
-        |                   +----------------------+
-        |                           |
-        |                           v
-        |                   +----------------------+
-        |                   | bolna-webhook Edge   |
-        |                   | Function             |
-        |                   +----------------------+
-        |                           |
-        v                           v
-+-----------------------------------------------+
-|           voice_call_logs table               |
-|  (status, transcript, recording_url, etc.)    |
-+-----------------------------------------------+
-```
-
----
-
-## Files to Create/Modify
-
-| File | Action | Description |
-|------|--------|-------------|
-| `supabase/functions/manage-voice-agent/index.ts` | Modify | Add `from_phone_number` to test calls |
-| `supabase/functions/make-voice-call/index.ts` | Modify | Add `from_phone_number` to production calls |
-| `supabase/functions/bolna-webhook/index.ts` | Create | New webhook endpoint for call updates |
-| `supabase/config.toml` | Modify | Add bolna-webhook function config |
-| `src/components/admin/AdminVoiceSettings.tsx` | Modify | Display transcript & recording in logs |
-| Database migration | Create | Add transcript, recording_url columns |
+### Why It Will Work Now
+- Agent is now configured with Plivo as telephony provider
+- Your number is registered with Plivo
+- Bolna will find the number in Plivo's system
 
 ---
 
 ## Summary
 
-1. **Immediate fix**: Add `from_phone_number: "+918035452070"` to both Edge Functions to ensure calls come from your Indian number
-2. **Webhook endpoint**: Create a new Edge Function to receive call updates from Bolna
-3. **Database update**: Add columns to store transcript and recording data
-4. **UI enhancement**: Show richer call data in the admin panel
-5. **Manual step**: You'll need to configure the webhook URL in your Bolna dashboard after deployment
+| Before | After |
+|--------|-------|
+| Agent: Twilio | Agent: Plivo |
+| from_phone_number: Removed | from_phone_number: "+918035452070" |
+| Caller ID: Random Plivo default | Caller ID: Your purchased number |
+
+This is a simple 2-line change that re-adds the `from_phone_number` parameter now that the telephony provider configuration is correct.
+
