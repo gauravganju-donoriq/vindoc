@@ -1,157 +1,222 @@
 
 
-# UI Refinement & Rebranding Plan
+# Vehicle Details Page Redesign Plan
 
-## Overview
+## Current State Analysis
 
-This plan addresses three key changes you requested:
-1. **New App Name** - Short, cool, unique name (like "Thru")
-2. **Typography Refinement** - Reduce display size from 2.5rem and adjust the scale
-3. **Primary Color Change** - Move from teal to a sophisticated neutral/gray-based palette
-4. **Apply to Login Page First** - Then proceed page by page
+The current VehicleDetails page has:
+- **1,330 lines** of code with 8+ collapsible SectionCard components
+- **Excessive vertical scrolling** - users must scroll through multiple stacked cards
+- **Shadow-heavy card design** with default Tailwind shadows
+- **Unused horizontal real estate** - content constrained to `max-w-4xl` (56rem)
+- **Repetitive card patterns** - each section uses the same collapsible Card wrapper
 
----
-
-## 1. App Name Suggestions
-
-Here are some short, unique, memorable names that work well for a document/vehicle management app:
-
-| Name | Meaning/Vibe |
-|------|--------------|
-| **Valt** | Short for "vault" - secure storage |
-| **Docu** | Minimal take on "document" |
-| **Kivo** | Made-up, modern, easy to say |
-| **Trax** | Tracking feel, edgy |
-| **Flux** | Movement, flow, change |
-| **Nexo** | Connection, next, link |
-| **Stow** | To store safely |
-| **Plex** | Complex made simple |
-
-**My recommendation:** **Valt** - it's short (4 letters like "Thru"), sounds premium, implies secure storage, and is unique.
-
-You can let me know which one you prefer, or suggest your own.
+### Current Sections (in order):
+1. Vehicle Header Card (registration, manufacturer, quick info)
+2. Verification Progress Card
+3. Vehicle Verification Section Card
+4. Vehicle Identity (SectionCard)
+5. Technical Specifications (SectionCard)
+6. Ownership & Finance (SectionCard)
+7. Document Expiry Status (SectionCard)
+8. Document Repository (SectionCard)
+9. Service History (separate Card component)
+10. Activity History (separate Card component)
 
 ---
 
-## 2. Typography Scale Adjustment
+## Proposed Redesign
 
-Reducing the scale for a more refined, less shouty feel:
+### Design Principles
 
-| Element | Current | New | Change |
-|---------|---------|-----|--------|
-| Display | 2.5rem (40px) | 1.875rem (30px) | -25% |
-| H1 | 2rem (32px) | 1.5rem (24px) | -25% |
-| H2 | 1.5rem (24px) | 1.25rem (20px) | -17% |
-| H3 | 1.25rem (20px) | 1.125rem (18px) | -10% |
-| Body | 1rem (16px) | 1rem (16px) | No change |
-| Small | 0.875rem (14px) | 0.875rem (14px) | No change |
-| Caption | 0.75rem (12px) | 0.75rem (12px) | No change |
-
-This creates a more subtle, professional hierarchy while keeping body text comfortable.
+| Principle | Implementation |
+|-----------|----------------|
+| Fluid layout | Remove `max-w-4xl`, use responsive grid |
+| White backgrounds | `bg-white` for content areas |
+| Gray borders only | `border border-gray-200`, no shadows |
+| Tabbed interface | Consolidate sections into tabs |
+| Tailored components | Custom inline layouts, not generic cards |
+| Better real estate use | Two-column layout on desktop |
 
 ---
 
-## 3. Primary Color Change
+### New Layout Structure
 
-Moving from teal to a sophisticated neutral palette. Two options:
-
-### Option A: Warm Gray Primary (Recommended)
-```css
---primary: 220 10% 40%;  /* Slate gray - sophisticated, neutral */
---primary-foreground: 0 0% 100%;
+```text
++----------------------------------------------------------+
+|  HEADER (Valt branding + Back button)                    |
++----------------------------------------------------------+
+|                                                          |
+|  +----------------------------------------------------+  |
+|  |  VEHICLE HERO SECTION (spans full width)           |  |
+|  |  - Photo | Reg Number | Make/Model | Quick Stats   |  |
+|  |  - Action buttons (Edit, Transfer, Refresh)        |  |
+|  +----------------------------------------------------+  |
+|                                                          |
+|  +----------------------------------------------------+  |
+|  |  TABS: Overview | Documents | Service | Activity   |  |
+|  +----------------------------------------------------+  |
+|                                                          |
+|  TAB CONTENT AREA                                        |
+|  +------------------------+---------------------------+  |
+|  |  LEFT COLUMN           |  RIGHT COLUMN             |  |
+|  |  (varies by tab)       |  (varies by tab)          |  |
+|  +------------------------+---------------------------+  |
+|                                                          |
++----------------------------------------------------------+
 ```
 
-### Option B: Cool Charcoal Primary
-```css
---primary: 215 15% 35%;  /* Cool charcoal with blue undertone */
---primary-foreground: 0 0% 100%;
-```
+---
 
-Both options maintain the pastel semantic colors (success, warning, destructive) you liked.
+### Tab Structure
+
+#### Tab 1: Overview (Default)
+Two-column fluid grid containing:
+- **Left**: Vehicle Identity + Technical Specifications  
+- **Right**: Ownership & Finance + Document Expiry Status
+
+All in a clean white panel with gray borders, no collapsibles.
+
+#### Tab 2: Documents
+- Verification section (photo upload)
+- Verification progress checklist
+- Document repository with upload
+
+#### Tab 3: Service
+- Service history timeline
+- Add service button
+- Summary stats (total spent, records, next due)
+
+#### Tab 4: Activity
+- Activity history log
+- Timeline view of all events
 
 ---
 
-## Implementation Sequence
+### Visual Style Changes
 
-### Phase 1: Global Design Token Updates
-
-**Files to modify:**
-- `src/index.css` - Update primary color, keep existing background/foreground
-- `src/pages/StyleGuide.tsx` - Update typography scale, app name references
-- `index.html` - Update page title and meta tags with new name
-
-### Phase 2: Login Page (Auth.tsx)
-
-**Changes:**
-- Replace "Vehicle Manager" with new app name
-- Update icon from Car to something more abstract (like a shield or abstract logo)
-- Ensure typography uses the new scale
-- Card styling remains the same (you liked it)
-
-### Phase 3: Landing Page (Index.tsx)
-
-- Update hero section with new name
-- Adjust heading sizes to new scale
-- Update tagline to be name-appropriate
-
-### Phase 4: Dashboard
-
-- Header branding update
-- Typography adjustments for headings
-
-### Phase 5: Other Pages
-
-- VehicleDetails, AddVehicle, Admin pages
-- Consistent branding throughout
+| Element | Current | New |
+|---------|---------|-----|
+| Content wrapper | `max-w-4xl` | `max-w-6xl` (wider) |
+| Card backgrounds | `bg-card` with shadows | `bg-white border border-border` |
+| Section headers | Collapsible with icons | Clean inline headers, no collapse |
+| Spacing | Multiple Cards with `mb-4` | Single white panel per tab |
+| Typography | `text-2xl` headers | `text-lg font-medium` section headers |
+| Buttons | Scattered across sections | Consolidated in header actions |
 
 ---
 
-## Files to Create/Modify
+## Implementation Tasks
 
-| File | Changes |
-|------|---------|
-| `src/index.css` | New primary color (gray-based) |
-| `src/pages/StyleGuide.tsx` | Updated typography scale, new name |
-| `index.html` | Title, meta description with new name |
-| `src/pages/Auth.tsx` | New app name, updated branding |
-| `src/pages/Index.tsx` | Hero section with new name |
-| `src/pages/Dashboard.tsx` | Header branding update |
+### Phase 1: Create Tab-Based Layout
+1. **Modify `VehicleDetails.tsx`**:
+   - Import and use Tabs component from `@/components/ui/tabs`
+   - Remove all SectionCard wrappers
+   - Create four TabsContent sections
+   - Widen container from `max-w-4xl` to `max-w-6xl`
+
+### Phase 2: Redesign Vehicle Hero
+2. **Update the vehicle header section**:
+   - Simplify to a clean white panel with gray border
+   - Remove shadows
+   - Keep registration, make/model, quick stats inline
+   - Keep action buttons (Edit, Transfer, Refresh) in header
+
+### Phase 3: Build Overview Tab
+3. **Create inline Overview content**:
+   - Two-column responsive grid (`grid-cols-1 lg:grid-cols-2`)
+   - Left column: Vehicle Identity fields, Technical Specs
+   - Right column: Ownership & Finance, Document Expiry
+   - Use simple section dividers (border-b) instead of cards
+   - Preserve edit mode functionality
+
+### Phase 4: Build Documents Tab
+4. **Consolidate document-related sections**:
+   - Verification Progress (without card wrapper)
+   - Vehicle Verification Section (photo upload)
+   - Document Repository (upload + list)
+   - All in one fluid white panel
+
+### Phase 5: Build Service Tab
+5. **Adapt ServiceHistory component**:
+   - Remove outer Card wrapper when used in tab
+   - Keep the timeline and summary stats
+   - Add service button in tab header
+
+### Phase 6: Build Activity Tab
+6. **Adapt VehicleHistory component**:
+   - Remove outer Card wrapper
+   - Remove collapsible (always open in tab context)
+   - Timeline view fills the space
+
+### Phase 7: Style Refinements
+7. **Update all panels to match design system**:
+   - White backgrounds: `bg-white`
+   - Gray borders: `border border-gray-200`
+   - No shadows on cards
+   - Consistent spacing with `p-6`
 
 ---
 
 ## Technical Details
 
-### Updated CSS Variables (index.css)
-```css
-:root {
-  /* Primary: Sophisticated slate gray */
-  --primary: 220 10% 40%;
-  --primary-foreground: 0 0% 100%;
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/pages/VehicleDetails.tsx` | Major restructure - tabs, layout, remove SectionCards |
+| `src/components/vehicle/ServiceHistory.tsx` | Add variant prop to remove Card wrapper |
+| `src/components/vehicle/VehicleHistory.tsx` | Add variant prop to remove Card wrapper |
+| `src/components/vehicle/VerificationProgress.tsx` | Add variant prop for inline mode |
+| `src/components/vehicle/VehicleVerificationSection.tsx` | Add variant prop for inline mode |
+
+### New Component Props
+
+Components will accept an optional `variant?: "card" | "inline"` prop:
+- `card` (default): Current behavior with Card wrapper
+- `inline`: No Card wrapper, just content
+
+### Tabs Implementation
+
+```typescript
+<Tabs defaultValue="overview" className="w-full">
+  <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0">
+    <TabsTrigger value="overview" className="...">Overview</TabsTrigger>
+    <TabsTrigger value="documents" className="...">Documents</TabsTrigger>
+    <TabsTrigger value="service" className="...">Service</TabsTrigger>
+    <TabsTrigger value="activity" className="...">Activity</TabsTrigger>
+  </TabsList>
   
-  /* Everything else stays the same - you liked it */
-  --background: 210 20% 98%;
-  --foreground: 220 20% 18%;
-  /* ... rest unchanged ... */
-}
+  <TabsContent value="overview">
+    {/* Two-column grid with vehicle details */}
+  </TabsContent>
+  
+  <TabsContent value="documents">
+    {/* Verification + Document upload */}
+  </TabsContent>
+  
+  <TabsContent value="service">
+    {/* Service history */}
+  </TabsContent>
+  
+  <TabsContent value="activity">
+    {/* Activity log */}
+  </TabsContent>
+</Tabs>
 ```
 
-### Updated Typography in StyleGuide.tsx
-```typescript
-const typographyScale = [
-  { name: "Display", size: "1.875rem", weight: "700", className: "text-3xl font-bold" },
-  { name: "H1", size: "1.5rem", weight: "600", className: "text-2xl font-semibold" },
-  { name: "H2", size: "1.25rem", weight: "600", className: "text-xl font-semibold" },
-  { name: "H3", size: "1.125rem", weight: "500", className: "text-lg font-medium" },
-  // Body, Small, Caption stay same
-];
-```
+### Responsive Behavior
+
+- **Mobile (< 1024px)**: Single column layout, tabs stack horizontally
+- **Desktop (>= 1024px)**: Two-column grid in Overview tab
 
 ---
 
-## Notes
+## Expected Outcomes
 
-- The new gray primary is elegant and works well with the soft charcoal text
-- Cards, borders, and shadows remain unchanged as you approved them
-- The name change will be reflected in the browser tab, login page, and throughout the app
-- Starting with login page allows you to see the full effect before proceeding
+- Reduced scrolling by 60-70%
+- Better use of horizontal space
+- Cleaner, more modern appearance
+- Faster information access via tabs
+- Consistent "white + gray border" aesthetic
 
