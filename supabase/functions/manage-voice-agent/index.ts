@@ -173,11 +173,11 @@ serve(async (req) => {
       if (postAction === "create" || postAction === "update") {
         const config = body.config as Partial<VoiceAgentConfig>;
 
-        // Build Bolna agent payload with correct structure
+        // Build Bolna agent payload matching API docs structure
         const bolnaPayload = {
           agent_config: {
             agent_name: config.agent_name || "CertChaperone Reminder",
-            agent_welcome_message: config.welcome_message,
+            agent_welcome_message: config.welcome_message || "Hello!",
             agent_type: "other",
             tasks: [
               {
@@ -187,26 +187,26 @@ serve(async (req) => {
                     agent_type: "simple_llm_agent",
                     agent_flow_type: "streaming",
                     llm_config: {
+                      agent_flow_type: "streaming",
                       provider: "openai",
+                      family: "openai",
                       model: "gpt-4.1-mini",
-                      temperature: 0.3,
                       max_tokens: 150,
+                      temperature: 0.3,
+                      top_p: 0.9,
+                      request_json: false,
                     },
                   },
                   synthesizer: {
-                    provider: config.voice_provider || "elevenlabs",
-                    provider_config: config.voice_provider === "sarvam" 
-                      ? {
-                          voice: config.voice_id || "meera",
-                          model: "bulbul:v1",
-                        }
-                      : {
-                          voice: config.voice_id || "Nila",
-                          voice_id: "V9LCAAi4tTlqe9JadbCo",
-                          model: "eleven_turbo_v2_5",
-                        },
+                    provider: "elevenlabs",
+                    provider_config: {
+                      voice: "Nila",
+                      voice_id: "V9LCAAi4tTlqe9JadbCo",
+                      model: "eleven_turbo_v2_5",
+                    },
                     stream: true,
                     buffer_size: 250,
+                    audio_format: "wav",
                   },
                   transcriber: {
                     provider: "deepgram",
@@ -215,13 +215,14 @@ serve(async (req) => {
                     stream: true,
                     sampling_rate: 16000,
                     encoding: "linear16",
+                    endpointing: 250,
                   },
                   input: {
-                    provider: "default",
+                    provider: "twilio",
                     format: "wav",
                   },
                   output: {
-                    provider: "default",
+                    provider: "twilio",
                     format: "wav",
                   },
                 },
@@ -234,16 +235,22 @@ serve(async (req) => {
                   hangup_after_silence: config.hangup_after_silence || 10,
                   incremental_delay: 400,
                   number_of_words_for_interruption: 2,
+                  hangup_after_LLMCall: false,
+                  backchanneling: false,
+                  ambient_noise: false,
+                  voicemail: false,
                 },
               },
             ],
           },
           agent_prompts: {
             task_1: {
-              system_prompt: config.system_prompt,
+              system_prompt: config.system_prompt || "You are a helpful assistant.",
             },
           },
         };
+
+        console.log("Bolna payload:", JSON.stringify(bolnaPayload, null, 2));
 
         let bolnaAgentId = config.bolna_agent_id;
 
