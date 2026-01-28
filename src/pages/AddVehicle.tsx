@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Search, Loader2, Car, AlertTriangle, Send } from "lucide-react";
+import { ArrowLeft, Search, Loader2, Car, AlertTriangle, Send, Shield } from "lucide-react";
 import { format } from "date-fns";
 import { logVehicleEvent } from "@/lib/vehicleHistory";
 import { RequestTransferDialog } from "@/components/vehicle/RequestTransferDialog";
@@ -236,7 +236,13 @@ const AddVehicle = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
+              <Shield className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <h1 className="text-lg font-semibold">Valt</h1>
+          </div>
           <Button variant="ghost" size="sm" asChild>
             <Link to="/dashboard">
               <ArrowLeft className="h-4 w-4 mr-2" />
