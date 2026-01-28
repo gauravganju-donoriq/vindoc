@@ -146,6 +146,36 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          created_at: string | null
+          id: string
+          phone_number: string | null
+          phone_verified: boolean | null
+          preferred_language: string | null
+          updated_at: string | null
+          voice_reminders_enabled: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          id: string
+          phone_number?: string | null
+          phone_verified?: boolean | null
+          preferred_language?: string | null
+          updated_at?: string | null
+          voice_reminders_enabled?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          phone_number?: string | null
+          phone_verified?: boolean | null
+          preferred_language?: string | null
+          updated_at?: string | null
+          voice_reminders_enabled?: boolean | null
+        }
+        Relationships: []
+      }
       service_records: {
         Row: {
           cost: number | null
@@ -460,6 +490,50 @@ export type Database = {
           wheelbase?: string | null
         }
         Relationships: []
+      }
+      voice_call_logs: {
+        Row: {
+          bolna_call_id: string | null
+          call_type: string
+          created_at: string | null
+          document_type: string | null
+          duration_seconds: number | null
+          id: string
+          status: string | null
+          user_id: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          bolna_call_id?: string | null
+          call_type: string
+          created_at?: string | null
+          document_type?: string | null
+          duration_seconds?: number | null
+          id?: string
+          status?: string | null
+          user_id: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          bolna_call_id?: string | null
+          call_type?: string
+          created_at?: string | null
+          document_type?: string | null
+          duration_seconds?: number | null
+          id?: string
+          status?: string | null
+          user_id?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_call_logs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
