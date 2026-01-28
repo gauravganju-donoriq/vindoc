@@ -324,6 +324,59 @@ export type Database = {
           },
         ]
       }
+      vehicle_listings: {
+        Row: {
+          additional_notes: string | null
+          admin_notes: string | null
+          ai_estimated_price: number | null
+          created_at: string
+          expected_price: number
+          id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          additional_notes?: string | null
+          admin_notes?: string | null
+          ai_estimated_price?: number | null
+          created_at?: string
+          expected_price: number
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          additional_notes?: string | null
+          admin_notes?: string | null
+          ai_estimated_price?: number | null
+          created_at?: string
+          expected_price?: number
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_listings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_transfers: {
         Row: {
           created_at: string

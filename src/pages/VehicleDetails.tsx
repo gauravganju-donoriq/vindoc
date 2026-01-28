@@ -11,7 +11,7 @@ import {
   AlertTriangle, CheckCircle, Clock, Car, Calendar, Shield,
   Settings, User, Fuel, Palette, Users, Banknote, Hash,
   Gauge, Weight, FileCheck, RefreshCw, Loader2, Pencil, Save, X, Sparkles,
-  LayoutGrid, FileStack, Wrench, History
+  LayoutGrid, FileStack, Wrench, History, IndianRupee
 } from "lucide-react";
 import { format, differenceInDays, isPast, formatDistanceToNow } from "date-fns";
 import {
@@ -33,6 +33,7 @@ import VehicleVerificationSection from "@/components/vehicle/VehicleVerification
 import VehicleProfileImage from "@/components/vehicle/VehicleProfileImage";
 import VerificationProgress from "@/components/vehicle/VerificationProgress";
 import ExpiryIntelligence from "@/components/vehicle/ExpiryIntelligence";
+import SellVehicleTab from "@/components/vehicle/SellVehicleTab";
 import { logVehicleEvent } from "@/lib/vehicleHistory";
 import { calculateVerificationProgress } from "@/lib/verificationChecks";
 import { toTitleCase } from "@/lib/utils";
@@ -945,6 +946,10 @@ const VehicleDetails = () => {
               <History className="h-4 w-4" />
               <span className="hidden sm:inline">Activity</span>
             </TabsTrigger>
+            <TabsTrigger value="sell" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <IndianRupee className="h-4 w-4" />
+              <span className="hidden sm:inline">Sell</span>
+            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab - Expiry Intelligence Only */}
@@ -1397,6 +1402,14 @@ const VehicleDetails = () => {
           {/* Activity Tab */}
           <TabsContent value="activity" className="mt-0">
             <VehicleHistory vehicleId={vehicle.id} variant="inline" />
+          </TabsContent>
+
+          {/* Sell Tab */}
+          <TabsContent value="sell" className="mt-0">
+            <SellVehicleTab 
+              vehicle={vehicle} 
+              isVerified={!!vehicle.is_verified}
+            />
           </TabsContent>
         </Tabs>
       </main>
