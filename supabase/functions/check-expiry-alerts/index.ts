@@ -49,6 +49,15 @@ interface ServiceReminder {
   notificationType: "30_day" | "7_day" | "overdue";
 }
 
+interface LifespanAlert {
+  vehicle: Vehicle;
+  vehicleAge: number;
+  maxLifespan: number;
+  yearsRemaining: number;
+  fuelType: string;
+  alertType: "approaching" | "exceeded";
+}
+
 interface AIContent {
   estimatedCost: string;
   tip: string;
@@ -62,11 +71,19 @@ interface ServiceAIContent {
   urgency: string;
 }
 
+interface LifespanAIContent {
+  advice: string;
+  options: string;
+  urgency: string;
+  estimatedValue: string;
+}
+
 interface UserAlert {
   userId: string;
   userEmail: string;
   documents: Array<ExpiringDocument & { aiContent: AIContent }>;
   services: Array<ServiceReminder & { aiContent: ServiceAIContent }>;
+  lifespanAlerts: Array<LifespanAlert & { aiContent: LifespanAIContent }>;
 }
 
 const DOCUMENT_LABELS: Record<string, string> = {
@@ -89,6 +106,49 @@ const SERVICE_TYPE_LABELS: Record<string, string> = {
   other: "Other Service",
 };
 
+// Vehicle lifespan limits based on Indian regulations (in years)
+// Using stricter metro limits by default
+const VEHICLE_LIFESPAN_LIMITS: Record<string, { metro: number | null; nonMetro: number | null }> = {
+  DIESEL: { metro: 10, nonMetro: 15 },
+  PETROL: { metro: 15, nonMetro: 20 },
+  CNG: { metro: 15, nonMetro: 20 },
+  LPG: { metro: 15, nonMetro: 20 },
+  ELECTRIC: { metro: null, nonMetro: null }, // No limit for EVs
+  HYBRID: { metro: 15, nonMetro: 20 },
+};
+
+// Check if a vehicle is approaching its end-of-life
+function checkVehicleLifespan(vehicle: Vehicle): LifespanAlert | null {
+  if (!vehicle.registration_date || !vehicle.fuel_type) return null;
+
+  const fuelType = vehicle.fuel_type.toUpperCase();
+  const limits = VEHICLE_LIFESPAN_LIMITS[fuelType];
+  
+  // If no limit defined or EV (no limit), skip
+  if (!limits || !limits.metro) return null;
+
+  const registrationDate = new Date(vehicle.registration_date);
+  const registrationYear = registrationDate.getFullYear();
+  const currentYear = new Date().getFullYear();
+  const vehicleAge = currentYear - registrationYear;
+  const maxLifespan = limits.metro; // Use stricter metro limit
+  const yearsRemaining = maxLifespan - vehicleAge;
+
+  // Alert if vehicle is within 2 years of limit or has exceeded it
+  if (yearsRemaining <= 2) {
+    return {
+      vehicle,
+      vehicleAge,
+      maxLifespan,
+      yearsRemaining,
+      fuelType,
+      alertType: yearsRemaining <= 0 ? "exceeded" : "approaching",
+    };
+  }
+  
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -110,7 +170,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const resend = new Resend(resendApiKey);
 
-    console.log("Starting expiry and service alert check...");
+    console.log("Starting expiry, service, and lifespan alert check...");
 
     // Fetch all vehicles with their expiry dates
     const { data: vehicles, error: vehiclesError } = await supabase
@@ -140,9 +200,11 @@ serve(async (req) => {
 
     const expiringDocuments: ExpiringDocument[] = [];
     const serviceReminders: ServiceReminder[] = [];
+    const lifespanAlerts: LifespanAlert[] = [];
 
-    // Check each vehicle for expiring documents
+    // Check each vehicle for expiring documents and lifespan
     for (const vehicle of vehicles || []) {
+      // Check document expiries
       const documentFields = [
         { field: "insurance_expiry", type: "insurance" as const },
         { field: "pucc_valid_upto", type: "pucc" as const },
@@ -177,6 +239,12 @@ serve(async (req) => {
             notificationType,
           });
         }
+      }
+
+      // Check vehicle lifespan
+      const lifespanAlert = checkVehicleLifespan(vehicle);
+      if (lifespanAlert) {
+        lifespanAlerts.push(lifespanAlert);
       }
     }
 
@@ -214,11 +282,11 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Found ${expiringDocuments.length} expiring documents and ${serviceReminders.length} service reminders`);
+    console.log(`Found ${expiringDocuments.length} expiring documents, ${serviceReminders.length} service reminders, and ${lifespanAlerts.length} lifespan alerts`);
 
-    if (expiringDocuments.length === 0 && serviceReminders.length === 0) {
+    if (expiringDocuments.length === 0 && serviceReminders.length === 0 && lifespanAlerts.length === 0) {
       return new Response(
-        JSON.stringify({ message: "No expiring documents or service reminders found", processed: 0 }),
+        JSON.stringify({ message: "No expiring documents, service reminders, or lifespan alerts found", processed: 0 }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -247,22 +315,26 @@ serve(async (req) => {
       (reminder) => !notifiedSet.has(`${reminder.vehicle.id}-service_${reminder.serviceRecord.id}-${reminder.notificationType}`)
     );
 
-    console.log(`${newDocuments.length} new documents and ${newServiceReminders.length} new service reminders to notify about`);
+    const newLifespanAlerts = lifespanAlerts.filter(
+      (alert) => !notifiedSet.has(`${alert.vehicle.id}-lifespan-${alert.alertType}`)
+    );
 
-    if (newDocuments.length === 0 && newServiceReminders.length === 0) {
+    console.log(`${newDocuments.length} new documents, ${newServiceReminders.length} new service reminders, and ${newLifespanAlerts.length} new lifespan alerts to notify about`);
+
+    if (newDocuments.length === 0 && newServiceReminders.length === 0 && newLifespanAlerts.length === 0) {
       return new Response(
-        JSON.stringify({ message: "All expiring documents and services already notified", processed: 0 }),
+        JSON.stringify({ message: "All alerts already notified", processed: 0 }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // Group by user
-    const userAlerts = new Map<string, { documents: ExpiringDocument[], services: ServiceReminder[] }>();
+    const userAlerts = new Map<string, { documents: ExpiringDocument[], services: ServiceReminder[], lifespanAlerts: LifespanAlert[] }>();
     
     for (const doc of newDocuments) {
       const userId = doc.vehicle.user_id;
       if (!userAlerts.has(userId)) {
-        userAlerts.set(userId, { documents: [], services: [] });
+        userAlerts.set(userId, { documents: [], services: [], lifespanAlerts: [] });
       }
       userAlerts.get(userId)!.documents.push(doc);
     }
@@ -270,9 +342,17 @@ serve(async (req) => {
     for (const reminder of newServiceReminders) {
       const userId = reminder.vehicle.user_id;
       if (!userAlerts.has(userId)) {
-        userAlerts.set(userId, { documents: [], services: [] });
+        userAlerts.set(userId, { documents: [], services: [], lifespanAlerts: [] });
       }
       userAlerts.get(userId)!.services.push(reminder);
+    }
+
+    for (const alert of newLifespanAlerts) {
+      const userId = alert.vehicle.user_id;
+      if (!userAlerts.has(userId)) {
+        userAlerts.set(userId, { documents: [], services: [], lifespanAlerts: [] });
+      }
+      userAlerts.get(userId)!.lifespanAlerts.push(alert);
     }
 
     console.log(`Processing alerts for ${userAlerts.size} users`);
@@ -290,7 +370,7 @@ serve(async (req) => {
       }
 
       const userEmail = userData.user.email;
-      console.log(`Processing ${alerts.documents.length} documents and ${alerts.services.length} services for user ${userEmail}`);
+      console.log(`Processing ${alerts.documents.length} documents, ${alerts.services.length} services, and ${alerts.lifespanAlerts.length} lifespan alerts for user ${userEmail}`);
 
       // Generate AI content for each document
       const documentsWithAI: Array<ExpiringDocument & { aiContent: AIContent }> = [];
@@ -331,9 +411,31 @@ serve(async (req) => {
         }
       }
 
+      // Generate AI content for each lifespan alert
+      const lifespanAlertsWithAI: Array<LifespanAlert & { aiContent: LifespanAIContent }> = [];
+      for (const alert of alerts.lifespanAlerts) {
+        try {
+          const aiContent = await generateLifespanAIContent(alert, lovableApiKey);
+          lifespanAlertsWithAI.push({ ...alert, aiContent });
+        } catch (aiError) {
+          console.error(`AI generation failed for lifespan alert:`, aiError);
+          lifespanAlertsWithAI.push({
+            ...alert,
+            aiContent: {
+              advice: alert.alertType === "exceeded" 
+                ? "Your vehicle has exceeded the permissible lifespan in metro cities. Consider options like scrapping or re-registration."
+                : `Your vehicle will reach its ${alert.maxLifespan}-year limit in ${alert.yearsRemaining} year(s). Start planning now.`,
+              options: "1. Scrap the vehicle through authorized centers\n2. Apply for re-registration (if eligible)\n3. Sell before end-of-life date",
+              urgency: alert.alertType === "exceeded" ? "Critical" : "High",
+              estimatedValue: "Scrap value typically ranges from ₹15,000 - ₹40,000 depending on vehicle condition and weight.",
+            },
+          });
+        }
+      }
+
       // Send consolidated email
       try {
-        await sendConsolidatedEmail(resend, userEmail, documentsWithAI, servicesWithAI);
+        await sendConsolidatedEmail(resend, userEmail, documentsWithAI, servicesWithAI, lifespanAlertsWithAI);
         emailsSent++;
         console.log(`Email sent to ${userEmail}`);
       } catch (emailError) {
@@ -379,6 +481,25 @@ serve(async (req) => {
         }
       }
 
+      // Log lifespan notifications
+      for (const alert of lifespanAlertsWithAI) {
+        const { error: insertError } = await supabase
+          .from("expiry_notifications")
+          .insert({
+            vehicle_id: alert.vehicle.id,
+            user_id: userId,
+            document_type: "lifespan",
+            notification_type: alert.alertType,
+            ai_content: alert.aiContent,
+          });
+
+        if (insertError) {
+          console.error("Failed to log lifespan notification:", insertError);
+        } else {
+          notificationsLogged++;
+        }
+      }
+
       // Log to vehicle history for documents
       for (const doc of documentsWithAI) {
         await supabase.from("vehicle_history").insert({
@@ -409,13 +530,30 @@ serve(async (req) => {
           },
         });
       }
+
+      // Log to vehicle history for lifespan alerts
+      for (const alert of lifespanAlertsWithAI) {
+        await supabase.from("vehicle_history").insert({
+          vehicle_id: alert.vehicle.id,
+          user_id: userId,
+          event_type: "lifespan_alert",
+          event_description: `Vehicle lifespan alert: ${alert.fuelType} vehicle is ${alert.vehicleAge} years old (${alert.alertType === "exceeded" ? "exceeded" : "approaching"} ${alert.maxLifespan}-year limit)`,
+          metadata: {
+            fuel_type: alert.fuelType,
+            vehicle_age: alert.vehicleAge,
+            max_lifespan: alert.maxLifespan,
+            years_remaining: alert.yearsRemaining,
+            alert_type: alert.alertType,
+          },
+        });
+      }
     }
 
     console.log(`Completed: ${emailsSent} emails sent, ${notificationsLogged} notifications logged`);
 
     return new Response(
       JSON.stringify({
-        message: "Expiry and service alerts processed successfully",
+        message: "Expiry, service, and lifespan alerts processed successfully",
         emailsSent,
         notificationsLogged,
       }),
@@ -450,6 +588,12 @@ Expiry Date: ${doc.expiryDate}
 Days Until Expiry: ${doc.daysUntilExpiry}
 Status: ${doc.notificationType === "expired" ? "EXPIRED" : doc.notificationType === "7_day" ? "Expiring in 7 days or less" : "Expiring in 30 days or less"}
 
+${vehicleAge && vehicleAge >= 10 ? `Note: This is an older vehicle (${vehicleAge} years). Consider mentioning:
+- Higher insurance premiums for older vehicles
+- For diesel vehicles in metros: 10-year limit may apply
+- For petrol vehicles in metros: 15-year limit may apply
+- Importance of keeping fitness certificate updated for older vehicles` : ""}
+
 Provide practical, India-specific advice.`;
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -475,11 +619,11 @@ Provide practical, India-specific advice.`;
               properties: {
                 estimatedCost: {
                   type: "string",
-                  description: "Estimated renewal cost range in INR (e.g., '₹500 - ₹1,000')",
+                  description: "Estimated renewal cost range in INR (e.g., '₹500 - ₹1,000'). For older vehicles, mention if premiums may be higher.",
                 },
                 tip: {
                   type: "string",
-                  description: "Practical tip for renewal (max 100 words)",
+                  description: "Practical tip for renewal (max 100 words). Include specific advice for older vehicles if applicable.",
                 },
                 urgency: {
                   type: "string",
@@ -597,11 +741,98 @@ Provide a helpful, India-specific maintenance reminder.`;
   return JSON.parse(toolCall.function.arguments);
 }
 
+async function generateLifespanAIContent(alert: LifespanAlert, apiKey: string): Promise<LifespanAIContent> {
+  const prompt = `You are an expert on Indian vehicle regulations and the vehicle scrappage policy.
+
+Generate advice for a vehicle approaching its end-of-life:
+
+Vehicle: ${alert.vehicle.maker_model || alert.vehicle.registration_number}
+Registration: ${alert.vehicle.registration_number}
+Vehicle Class: ${alert.vehicle.vehicle_class || "Personal"}
+Fuel Type: ${alert.fuelType}
+Vehicle Age: ${alert.vehicleAge} years
+Maximum Lifespan (Metro): ${alert.maxLifespan} years
+Years Remaining: ${alert.yearsRemaining}
+Status: ${alert.alertType === "exceeded" ? "EXCEEDED the permissible lifespan" : `Approaching end-of-life (${alert.yearsRemaining} years remaining)`}
+
+Context:
+- In India, diesel vehicles in metro cities have a 10-year lifespan (15 years in non-metros)
+- Petrol/CNG vehicles in metros have a 15-year lifespan (20 years in non-metros)
+- The Vehicle Scrappage Policy offers incentives for scrapping old vehicles
+- Vehicles can sometimes be re-registered in non-metro areas
+
+Provide practical advice for the owner.`;
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-3-flash-preview",
+      messages: [
+        { role: "system", content: "You are a helpful assistant that provides advice on vehicle lifespan and scrappage policies in India. Always respond with valid JSON." },
+        { role: "user", content: prompt },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "provide_lifespan_advice",
+            description: "Provide structured advice for a vehicle approaching end-of-life",
+            parameters: {
+              type: "object",
+              properties: {
+                advice: {
+                  type: "string",
+                  description: "Main advice for the vehicle owner based on the lifespan status (max 80 words)",
+                },
+                options: {
+                  type: "string",
+                  description: "List of options available to the owner (scrap, re-register, sell, etc.) with brief explanation (max 100 words)",
+                },
+                urgency: {
+                  type: "string",
+                  description: "Urgency level: Critical (exceeded), High (1 year or less), or Medium (2 years)",
+                },
+                estimatedValue: {
+                  type: "string",
+                  description: "Estimated scrap value or resale value range in INR",
+                },
+              },
+              required: ["advice", "options", "urgency", "estimatedValue"],
+              additionalProperties: false,
+            },
+          },
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "provide_lifespan_advice" } },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("AI API error:", response.status, errorText);
+    throw new Error(`AI API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+  
+  if (!toolCall?.function?.arguments) {
+    throw new Error("No tool call in AI response");
+  }
+
+  return JSON.parse(toolCall.function.arguments);
+}
+
 async function sendConsolidatedEmail(
   resend: InstanceType<typeof Resend>,
   email: string,
   documents: Array<ExpiringDocument & { aiContent: AIContent }>,
-  services: Array<ServiceReminder & { aiContent: ServiceAIContent }>
+  services: Array<ServiceReminder & { aiContent: ServiceAIContent }>,
+  lifespanAlerts: Array<LifespanAlert & { aiContent: LifespanAIContent }>
 ): Promise<void> {
   const expiredCount = documents.filter((d) => d.notificationType === "expired").length;
   const urgentDocCount = documents.filter((d) => d.notificationType === "7_day").length;
@@ -611,16 +842,24 @@ async function sendConsolidatedEmail(
   const urgentServiceCount = services.filter((s) => s.notificationType === "7_day").length;
   const upcomingServiceCount = services.filter((s) => s.notificationType === "30_day").length;
 
+  const exceededLifespanCount = lifespanAlerts.filter((l) => l.alertType === "exceeded").length;
+  const approachingLifespanCount = lifespanAlerts.filter((l) => l.alertType === "approaching").length;
+
   const hasDocuments = documents.length > 0;
   const hasServices = services.length > 0;
+  const hasLifespanAlerts = lifespanAlerts.length > 0;
 
   let subject: string;
-  if (expiredCount > 0 || overdueServiceCount > 0) {
-    subject = `🚨 Action Required: ${expiredCount > 0 ? `${expiredCount} Expired Document(s)` : ""}${expiredCount > 0 && overdueServiceCount > 0 ? " & " : ""}${overdueServiceCount > 0 ? `${overdueServiceCount} Overdue Service(s)` : ""}`;
-  } else if (urgentDocCount > 0 || urgentServiceCount > 0) {
-    subject = `⚠️ Reminder: ${urgentDocCount + urgentServiceCount} Item(s) Need Attention This Week`;
+  if (exceededLifespanCount > 0 || expiredCount > 0 || overdueServiceCount > 0) {
+    const parts = [];
+    if (exceededLifespanCount > 0) parts.push(`${exceededLifespanCount} Vehicle(s) Past Lifespan`);
+    if (expiredCount > 0) parts.push(`${expiredCount} Expired Document(s)`);
+    if (overdueServiceCount > 0) parts.push(`${overdueServiceCount} Overdue Service(s)`);
+    subject = `🚨 Action Required: ${parts.join(" & ")}`;
+  } else if (urgentDocCount > 0 || urgentServiceCount > 0 || approachingLifespanCount > 0) {
+    subject = `⚠️ Reminder: ${urgentDocCount + urgentServiceCount + approachingLifespanCount} Item(s) Need Attention`;
   } else {
-    subject = `📋 Upcoming: ${upcomingDocCount + upcomingServiceCount} Item(s) Due in 30 Days`;
+    subject = `📋 Upcoming: ${upcomingDocCount + upcomingServiceCount} Item(s) Due Soon`;
   }
 
   // Document rows
@@ -703,6 +942,47 @@ async function sendConsolidatedEmail(
     })
     .join("");
 
+  // Lifespan alert rows
+  const lifespanRows = lifespanAlerts
+    .map((alert) => {
+      const statusEmoji = alert.alertType === "exceeded" ? "🔴" : "🟠";
+      const statusText = alert.alertType === "exceeded"
+        ? `EXCEEDED (${alert.vehicleAge} years old)`
+        : `${alert.yearsRemaining} year(s) remaining`;
+
+      return `
+        <tr>
+          <td style="padding: 16px; border-bottom: 1px solid #e5e7eb;">
+            <div style="font-weight: 600; color: #1f2937;">${alert.vehicle.registration_number}</div>
+            <div style="font-size: 14px; color: #6b7280;">${alert.vehicle.maker_model || "Vehicle"}</div>
+          </td>
+          <td style="padding: 16px; border-bottom: 1px solid #e5e7eb;">
+            <div style="font-weight: 500;">${alert.fuelType} Vehicle</div>
+            <div style="font-size: 12px; color: #6b7280;">Metro limit: ${alert.maxLifespan} years</div>
+          </td>
+          <td style="padding: 16px; border-bottom: 1px solid #e5e7eb;">
+            <div>${statusEmoji} ${statusText}</div>
+            <div style="font-size: 12px; color: #6b7280;">Age: ${alert.vehicleAge} years</div>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="3" style="padding: 16px; background-color: ${alert.alertType === "exceeded" ? "#fef2f2" : "#fff7ed"}; border-bottom: 1px solid #e5e7eb;">
+            <div style="margin-bottom: 8px;">
+              <strong>📢 ${alert.aiContent.advice}</strong>
+            </div>
+            <div style="margin-bottom: 8px;">
+              <strong>📋 Options:</strong><br/>
+              <span style="white-space: pre-line;">${alert.aiContent.options}</span>
+            </div>
+            <div style="color: #047857;">
+              <strong>💰 ${alert.aiContent.estimatedValue}</strong>
+            </div>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -713,16 +993,33 @@ async function sendConsolidatedEmail(
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #374151; max-width: 600px; margin: 0 auto; padding: 20px;">
       <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
         <h1 style="color: white; margin: 0; font-size: 24px;">🚗 Vehicle Reminder</h1>
-        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0;">Documents & Services need your attention</p>
+        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0;">Documents, Services & Lifespan Updates</p>
       </div>
       
       <div style="background: white; padding: 24px; border: 1px solid #e5e7eb; border-top: none;">
         <div style="display: flex; gap: 16px; margin-bottom: 24px; text-align: center;">
+          ${exceededLifespanCount > 0 ? `<div style="flex: 1; background: #fef2f2; padding: 12px; border-radius: 8px;"><div style="font-size: 24px; font-weight: bold; color: #dc2626;">${exceededLifespanCount}</div><div style="font-size: 12px; color: #991b1b;">Past Lifespan</div></div>` : ""}
           ${expiredCount > 0 ? `<div style="flex: 1; background: #fef2f2; padding: 12px; border-radius: 8px;"><div style="font-size: 24px; font-weight: bold; color: #dc2626;">${expiredCount}</div><div style="font-size: 12px; color: #991b1b;">Expired</div></div>` : ""}
           ${overdueServiceCount > 0 ? `<div style="flex: 1; background: #fef2f2; padding: 12px; border-radius: 8px;"><div style="font-size: 24px; font-weight: bold; color: #dc2626;">${overdueServiceCount}</div><div style="font-size: 12px; color: #991b1b;">Overdue</div></div>` : ""}
-          ${urgentDocCount + urgentServiceCount > 0 ? `<div style="flex: 1; background: #fff7ed; padding: 12px; border-radius: 8px;"><div style="font-size: 24px; font-weight: bold; color: #ea580c;">${urgentDocCount + urgentServiceCount}</div><div style="font-size: 12px; color: #9a3412;">This Week</div></div>` : ""}
+          ${urgentDocCount + urgentServiceCount + approachingLifespanCount > 0 ? `<div style="flex: 1; background: #fff7ed; padding: 12px; border-radius: 8px;"><div style="font-size: 24px; font-weight: bold; color: #ea580c;">${urgentDocCount + urgentServiceCount + approachingLifespanCount}</div><div style="font-size: 12px; color: #9a3412;">Urgent</div></div>` : ""}
           ${upcomingDocCount + upcomingServiceCount > 0 ? `<div style="flex: 1; background: #fefce8; padding: 12px; border-radius: 8px;"><div style="font-size: 24px; font-weight: bold; color: #ca8a04;">${upcomingDocCount + upcomingServiceCount}</div><div style="font-size: 12px; color: #854d0e;">This Month</div></div>` : ""}
         </div>
+
+        ${hasLifespanAlerts ? `
+        <h2 style="font-size: 18px; color: #1f2937; margin: 24px 0 16px 0; padding-bottom: 8px; border-bottom: 2px solid #dc2626;">⏰ Vehicle Lifespan Alerts</h2>
+        <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb;">
+          <thead>
+            <tr style="background: #fef2f2;">
+              <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #991b1b;">Vehicle</th>
+              <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #991b1b;">Type</th>
+              <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #991b1b;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lifespanRows}
+          </tbody>
+        </table>
+        ` : ""}
 
         ${hasDocuments ? `
         <h2 style="font-size: 18px; color: #1f2937; margin: 24px 0 16px 0; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb;">📄 Document Renewals</h2>
