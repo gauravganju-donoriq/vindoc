@@ -1,222 +1,221 @@
 
-
-# Vehicle Details Page Redesign Plan
+# Enhanced AI-Powered Expiry Alert System Plan
 
 ## Current State Analysis
 
-The current VehicleDetails page has:
-- **1,330 lines** of code with 8+ collapsible SectionCard components
-- **Excessive vertical scrolling** - users must scroll through multiple stacked cards
-- **Shadow-heavy card design** with default Tailwind shadows
-- **Unused horizontal real estate** - content constrained to `max-w-4xl` (56rem)
-- **Repetitive card patterns** - each section uses the same collapsible Card wrapper
+The project already has a robust expiry alert system in place:
 
-### Current Sections (in order):
-1. Vehicle Header Card (registration, manufacturer, quick info)
-2. Verification Progress Card
-3. Vehicle Verification Section Card
-4. Vehicle Identity (SectionCard)
-5. Technical Specifications (SectionCard)
-6. Ownership & Finance (SectionCard)
-7. Document Expiry Status (SectionCard)
-8. Document Repository (SectionCard)
-9. Service History (separate Card component)
-10. Activity History (separate Card component)
+### Existing Infrastructure
+| Component | Status | Details |
+|-----------|--------|---------|
+| Edge Function | ✅ Exists | `check-expiry-alerts/index.ts` (782 lines) |
+| Cron Job | ✅ Configured | Runs daily at 2:30 AM UTC |
+| Document Types | ✅ Tracked | Insurance, PUCC, Fitness, Road Tax |
+| Service Reminders | ✅ Included | Next service due dates |
+| AI Generation | ✅ Using Lovable AI | `google/gemini-3-flash-preview` model |
+| Email Notifications | ✅ Via Resend | Consolidated emails per user |
+| Notification Logging | ✅ Working | Prevents duplicate alerts |
 
----
-
-## Proposed Redesign
-
-### Design Principles
-
-| Principle | Implementation |
-|-----------|----------------|
-| Fluid layout | Remove `max-w-4xl`, use responsive grid |
-| White backgrounds | `bg-white` for content areas |
-| Gray borders only | `border border-gray-200`, no shadows |
-| Tabbed interface | Consolidate sections into tabs |
-| Tailored components | Custom inline layouts, not generic cards |
-| Better real estate use | Two-column layout on desktop |
+### What's Missing
+1. **Vehicle Lifespan Logic** - Diesel vehicles in India have a 10-year lifespan in metro cities (15 years in non-metros), petrol vehicles have 15 years (20 years in non-metros)
+2. **Configurable Schedule** - Currently hardcoded to daily; user requested flexibility
+3. **In-App Display** - AI insights only sent via email, not shown in the app
+4. **Vehicle Age Alerts** - No alerts for vehicles approaching end-of-life
 
 ---
 
-### New Layout Structure
+## Proposed Enhancements
 
-```text
-+----------------------------------------------------------+
-|  HEADER (Valt branding + Back button)                    |
-+----------------------------------------------------------+
-|                                                          |
-|  +----------------------------------------------------+  |
-|  |  VEHICLE HERO SECTION (spans full width)           |  |
-|  |  - Photo | Reg Number | Make/Model | Quick Stats   |  |
-|  |  - Action buttons (Edit, Transfer, Refresh)        |  |
-|  +----------------------------------------------------+  |
-|                                                          |
-|  +----------------------------------------------------+  |
-|  |  TABS: Overview | Documents | Service | Activity   |  |
-|  +----------------------------------------------------+  |
-|                                                          |
-|  TAB CONTENT AREA                                        |
-|  +------------------------+---------------------------+  |
-|  |  LEFT COLUMN           |  RIGHT COLUMN             |  |
-|  |  (varies by tab)       |  (varies by tab)          |  |
-|  +------------------------+---------------------------+  |
-|                                                          |
-+----------------------------------------------------------+
-```
+### 1. Vehicle Lifespan Calculation
 
----
+Add logic to detect when a vehicle is approaching its end-of-life based on Indian regulations:
 
-### Tab Structure
+| Vehicle Type | Metro Limit | Non-Metro Limit |
+|--------------|-------------|-----------------|
+| Diesel | 10 years | 15 years |
+| Petrol/CNG | 15 years | 20 years |
+| Electric | No limit | No limit |
 
-#### Tab 1: Overview (Default)
-Two-column fluid grid containing:
-- **Left**: Vehicle Identity + Technical Specifications  
-- **Right**: Ownership & Finance + Document Expiry Status
+Since we don't have city data, we'll use the stricter metro limits by default and provide advisory alerts.
 
-All in a clean white panel with gray borders, no collapsibles.
+### 2. Enhanced Edge Function
 
-#### Tab 2: Documents
-- Verification section (photo upload)
-- Verification progress checklist
-- Document repository with upload
+Update `check-expiry-alerts/index.ts` to include:
+- Vehicle lifespan checks based on fuel type and registration date
+- More detailed AI prompts that consider vehicle age
+- New alert type: "vehicle_lifespan" for end-of-life warnings
 
-#### Tab 3: Service
-- Service history timeline
-- Add service button
-- Summary stats (total spent, records, next due)
+### 3. In-App Expiry Intelligence Component
 
-#### Tab 4: Activity
-- Activity history log
-- Timeline view of all events
+Create a new component to display AI-generated insights directly in the app:
+- Show on the Overview tab in Vehicle Details
+- Display upcoming expiry warnings with AI tips
+- Show vehicle lifespan status if applicable
 
----
+### 4. Cron Schedule Flexibility
 
-### Visual Style Changes
-
-| Element | Current | New |
-|---------|---------|-----|
-| Content wrapper | `max-w-4xl` | `max-w-6xl` (wider) |
-| Card backgrounds | `bg-card` with shadows | `bg-white border border-border` |
-| Section headers | Collapsible with icons | Clean inline headers, no collapse |
-| Spacing | Multiple Cards with `mb-4` | Single white panel per tab |
-| Typography | `text-2xl` headers | `text-lg font-medium` section headers |
-| Buttons | Scattered across sections | Consolidated in header actions |
+The current daily schedule is already good for production. For testing, we can manually trigger the function.
 
 ---
 
 ## Implementation Tasks
 
-### Phase 1: Create Tab-Based Layout
-1. **Modify `VehicleDetails.tsx`**:
-   - Import and use Tabs component from `@/components/ui/tabs`
-   - Remove all SectionCard wrappers
-   - Create four TabsContent sections
-   - Widen container from `max-w-4xl` to `max-w-6xl`
+### Phase 1: Add Vehicle Lifespan Logic to Edge Function
 
-### Phase 2: Redesign Vehicle Hero
-2. **Update the vehicle header section**:
-   - Simplify to a clean white panel with gray border
-   - Remove shadows
-   - Keep registration, make/model, quick stats inline
-   - Keep action buttons (Edit, Transfer, Refresh) in header
+**File: `supabase/functions/check-expiry-alerts/index.ts`**
 
-### Phase 3: Build Overview Tab
-3. **Create inline Overview content**:
-   - Two-column responsive grid (`grid-cols-1 lg:grid-cols-2`)
-   - Left column: Vehicle Identity fields, Technical Specs
-   - Right column: Ownership & Finance, Document Expiry
-   - Use simple section dividers (border-b) instead of cards
-   - Preserve edit mode functionality
+Add new interfaces and logic:
 
-### Phase 4: Build Documents Tab
-4. **Consolidate document-related sections**:
-   - Verification Progress (without card wrapper)
-   - Vehicle Verification Section (photo upload)
-   - Document Repository (upload + list)
-   - All in one fluid white panel
+```typescript
+interface LifespanAlert {
+  vehicle: Vehicle;
+  vehicleAge: number;
+  maxLifespan: number;
+  yearsRemaining: number;
+  fuelType: string;
+  alertType: "approaching" | "exceeded";
+}
+```
 
-### Phase 5: Build Service Tab
-5. **Adapt ServiceHistory component**:
-   - Remove outer Card wrapper when used in tab
-   - Keep the timeline and summary stats
-   - Add service button in tab header
+Add function to calculate vehicle lifespan:
+- Check fuel type (DIESEL, PETROL, CNG, ELECTRIC)
+- Calculate age from registration_date
+- Compare against limits (10 years diesel, 15 years petrol for metros)
+- Generate alerts for vehicles within 2 years of limit or exceeded
 
-### Phase 6: Build Activity Tab
-6. **Adapt VehicleHistory component**:
-   - Remove outer Card wrapper
-   - Remove collapsible (always open in tab context)
-   - Timeline view fills the space
+### Phase 2: Enhance AI Prompts
 
-### Phase 7: Style Refinements
-7. **Update all panels to match design system**:
-   - White backgrounds: `bg-white`
-   - Gray borders: `border border-gray-200`
-   - No shadows on cards
-   - Consistent spacing with `p-6`
+Update the `generateDocumentAIContent` function to:
+- Include vehicle age in cost estimates (older vehicles may have higher insurance)
+- Add India-specific context for fitness certificates (mandatory for commercial vehicles)
+- Reference re-registration requirements for vehicles over 15 years
+
+### Phase 3: Add Lifespan Alerts to Email
+
+Update `sendConsolidatedEmail` to include:
+- New section for vehicle lifespan warnings
+- AI-generated advice on options (scrap, re-register, sell)
+- Estimated scrap value ranges
+
+### Phase 4: Create In-App Expiry Intelligence Component
+
+**New File: `src/components/vehicle/ExpiryIntelligence.tsx`**
+
+A component that displays:
+- Upcoming document expiries with countdown
+- AI-generated renewal tips (fetched from expiry_notifications table)
+- Vehicle lifespan status indicator
+- Quick action buttons (set reminder, view renewal centers)
+
+### Phase 5: Display Expiry Intelligence in Overview Tab
+
+**File: `src/pages/VehicleDetails.tsx`**
+
+Add the new component to the Overview tab, showing:
+- Next upcoming expiry with AI tip
+- Lifespan progress bar for older vehicles
+- Link to full Documents tab for details
 
 ---
 
 ## Technical Details
 
+### Database Changes
+
+No schema changes needed - the existing `expiry_notifications` table already stores:
+- `ai_content` (JSONB) - Contains AI-generated tips
+- `notification_type` - Can add "lifespan" type
+
+### Edge Function Updates
+
+Update the existing function rather than creating a new one:
+
+1. Add `VEHICLE_LIFESPAN_LIMITS` constant:
+```typescript
+const VEHICLE_LIFESPAN_LIMITS = {
+  DIESEL: { metro: 10, nonMetro: 15 },
+  PETROL: { metro: 15, nonMetro: 20 },
+  CNG: { metro: 15, nonMetro: 20 },
+  LPG: { metro: 15, nonMetro: 20 },
+  ELECTRIC: { metro: null, nonMetro: null }, // No limit
+};
+```
+
+2. Add lifespan check function:
+```typescript
+function checkVehicleLifespan(vehicle: Vehicle): LifespanAlert | null {
+  if (!vehicle.registration_date || !vehicle.fuel_type) return null;
+  
+  const fuelType = vehicle.fuel_type.toUpperCase();
+  const limits = VEHICLE_LIFESPAN_LIMITS[fuelType];
+  if (!limits || !limits.metro) return null; // Electric or unknown
+  
+  const registrationYear = new Date(vehicle.registration_date).getFullYear();
+  const vehicleAge = new Date().getFullYear() - registrationYear;
+  const maxLifespan = limits.metro; // Use stricter metro limit
+  const yearsRemaining = maxLifespan - vehicleAge;
+  
+  if (yearsRemaining <= 2) {
+    return {
+      vehicle,
+      vehicleAge,
+      maxLifespan,
+      yearsRemaining,
+      fuelType,
+      alertType: yearsRemaining <= 0 ? "exceeded" : "approaching",
+    };
+  }
+  return null;
+}
+```
+
+3. Update AI prompt to include lifespan context
+
+### New Component Structure
+
+```typescript
+// src/components/vehicle/ExpiryIntelligence.tsx
+
+interface ExpiryIntelligenceProps {
+  vehicle: Vehicle;
+  expiryNotifications?: ExpiryNotification[];
+}
+
+// Shows:
+// - Most urgent upcoming expiry with AI tip
+// - Vehicle lifespan indicator (if applicable)
+// - Smart suggestions based on data
+```
+
 ### Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/pages/VehicleDetails.tsx` | Major restructure - tabs, layout, remove SectionCards |
-| `src/components/vehicle/ServiceHistory.tsx` | Add variant prop to remove Card wrapper |
-| `src/components/vehicle/VehicleHistory.tsx` | Add variant prop to remove Card wrapper |
-| `src/components/vehicle/VerificationProgress.tsx` | Add variant prop for inline mode |
-| `src/components/vehicle/VehicleVerificationSection.tsx` | Add variant prop for inline mode |
+| `supabase/functions/check-expiry-alerts/index.ts` | Add lifespan logic, enhance AI prompts |
+| `src/components/vehicle/ExpiryIntelligence.tsx` | New component for in-app display |
+| `src/pages/VehicleDetails.tsx` | Add ExpiryIntelligence to Overview tab |
 
-### New Component Props
+### Files to Create
 
-Components will accept an optional `variant?: "card" | "inline"` prop:
-- `card` (default): Current behavior with Card wrapper
-- `inline`: No Card wrapper, just content
+| File | Purpose |
+|------|---------|
+| `src/components/vehicle/ExpiryIntelligence.tsx` | In-app AI insights display |
 
-### Tabs Implementation
+---
 
-```typescript
-<Tabs defaultValue="overview" className="w-full">
-  <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0">
-    <TabsTrigger value="overview" className="...">Overview</TabsTrigger>
-    <TabsTrigger value="documents" className="...">Documents</TabsTrigger>
-    <TabsTrigger value="service" className="...">Service</TabsTrigger>
-    <TabsTrigger value="activity" className="...">Activity</TabsTrigger>
-  </TabsList>
-  
-  <TabsContent value="overview">
-    {/* Two-column grid with vehicle details */}
-  </TabsContent>
-  
-  <TabsContent value="documents">
-    {/* Verification + Document upload */}
-  </TabsContent>
-  
-  <TabsContent value="service">
-    {/* Service history */}
-  </TabsContent>
-  
-  <TabsContent value="activity">
-    {/* Activity log */}
-  </TabsContent>
-</Tabs>
-```
+## Testing Approach
 
-### Responsive Behavior
-
-- **Mobile (< 1024px)**: Single column layout, tabs stack horizontally
-- **Desktop (>= 1024px)**: Two-column grid in Overview tab
+1. Deploy the updated edge function
+2. Manually trigger it to test with existing vehicles
+3. Verify email content includes lifespan warnings (if applicable)
+4. Check that the in-app component displays correctly
+5. Test with different fuel types and ages
 
 ---
 
 ## Expected Outcomes
 
-- Reduced scrolling by 60-70%
-- Better use of horizontal space
-- Cleaner, more modern appearance
-- Faster information access via tabs
-- Consistent "white + gray border" aesthetic
-
+- Users see AI-powered renewal tips directly in the app
+- Diesel vehicle owners get early warnings about 10-year limit
+- More actionable advice based on vehicle age and type
+- Consolidated view of all upcoming renewals with intelligent suggestions
