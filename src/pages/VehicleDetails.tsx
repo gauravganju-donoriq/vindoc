@@ -1408,7 +1408,7 @@ const VehicleDetails = () => {
           <TabsContent value="sell" className="mt-0">
             <SellVehicleTab 
               vehicle={vehicle} 
-              isVerified={!!vehicle.is_verified}
+              verificationProgress={calculateVerificationProgress(vehicle, documents)}
             />
           </TabsContent>
         </Tabs>

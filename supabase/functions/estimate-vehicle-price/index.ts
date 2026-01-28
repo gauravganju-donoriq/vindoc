@@ -62,10 +62,35 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify the vehicle is verified
-    if (!vehicle.is_verified) {
+    // Check full verification status (all required fields)
+    const requiredIdentityFields = ['registration_number', 'owner_name', 'manufacturer', 'maker_model', 'registration_date'];
+    const requiredTechnicalFields = ['chassis_number', 'engine_number', 'fuel_type', 'color', 'seating_capacity', 'cubic_capacity', 'vehicle_class'];
+    const requiredOwnershipFields = ['owner_count', 'rc_status'];
+
+    const hasValue = (val: any) => val !== null && val !== undefined && val !== '';
+    
+    const identityCount = requiredIdentityFields.filter(f => hasValue(vehicle[f])).length;
+    const technicalCount = requiredTechnicalFields.filter(f => hasValue(vehicle[f])).length;
+    const ownershipCount = requiredOwnershipFields.filter(f => hasValue(vehicle[f])).length;
+
+    const isFullyVerified = 
+      vehicle.is_verified === true &&
+      identityCount >= 4 &&
+      technicalCount >= 5 &&
+      ownershipCount >= 2;
+
+    if (!isFullyVerified) {
+      const missingSteps = [];
+      if (!vehicle.is_verified) missingSteps.push('Photo Verification');
+      if (identityCount < 4) missingSteps.push(`Vehicle Identity (${identityCount}/4 fields)`);
+      if (technicalCount < 5) missingSteps.push(`Technical Specs (${technicalCount}/5 fields)`);
+      if (ownershipCount < 2) missingSteps.push(`Ownership Details (${ownershipCount}/2 fields)`);
+
       return new Response(
-        JSON.stringify({ error: "Vehicle must be verified before listing for sale" }),
+        JSON.stringify({ 
+          error: "Vehicle must be 100% verified before listing for sale",
+          missingSteps 
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

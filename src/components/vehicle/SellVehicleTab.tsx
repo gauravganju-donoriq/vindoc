@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { logVehicleEvent } from "@/lib/vehicleHistory";
+import { VerificationProgress as VerificationProgressType } from "@/lib/verificationChecks";
 import {
   IndianRupee,
   Sparkles,
@@ -29,6 +31,8 @@ import {
   XCircle,
   TrendingUp,
   Info,
+  Lock,
+  Circle,
 } from "lucide-react";
 
 interface Vehicle {
@@ -61,7 +65,7 @@ interface PriceEstimate {
 
 interface SellVehicleTabProps {
   vehicle: Vehicle;
-  isVerified: boolean;
+  verificationProgress: VerificationProgressType;
 }
 
 const formatCurrency = (amount: number) => {
@@ -89,7 +93,7 @@ const getStatusConfig = (status: string) => {
   }
 };
 
-const SellVehicleTab = ({ vehicle, isVerified }: SellVehicleTabProps) => {
+const SellVehicleTab = ({ vehicle, verificationProgress }: SellVehicleTabProps) => {
   const [listing, setListing] = useState<VehicleListing | null>(null);
   const [loading, setLoading] = useState(true);
   const [priceEstimate, setPriceEstimate] = useState<PriceEstimate | null>(null);
@@ -100,6 +104,8 @@ const SellVehicleTab = ({ vehicle, isVerified }: SellVehicleTabProps) => {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const { toast } = useToast();
+
+  const isFullyVerified = verificationProgress.isFullyVerified;
 
   useEffect(() => {
     fetchListing();
@@ -279,24 +285,85 @@ const SellVehicleTab = ({ vehicle, isVerified }: SellVehicleTabProps) => {
     );
   }
 
-  // Vehicle not verified
-  if (!isVerified) {
+  // Vehicle not fully verified - show detailed empty state
+  if (!isFullyVerified) {
+    const requiredSteps = verificationProgress.steps.filter(s => s.required);
+    const completedRequired = requiredSteps.filter(s => s.completed).length;
+
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-600" />
-            Verification Required
+            <Lock className="h-5 w-5 text-warning" />
+            Complete Verification to Sell
           </CardTitle>
           <CardDescription>
-            Your vehicle must be verified before you can list it for sale
+            Your vehicle must be 100% verified before listing for sale. This ensures buyer trust and faster sales.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Complete the verification process in the Verification tab to unlock the sell feature.
-            This ensures buyer trust and protects both parties in the transaction.
-          </p>
+        <CardContent className="space-y-6">
+          {/* Progress Bar */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Verification Progress</span>
+              <span className="font-medium">{verificationProgress.percentage}%</span>
+            </div>
+            <Progress value={verificationProgress.percentage} className="h-2" />
+            <p className="text-xs text-muted-foreground">
+              {completedRequired} of {requiredSteps.length} required steps complete
+            </p>
+          </div>
+
+          {/* Verification Steps Checklist */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Required Steps</Label>
+            <div className="space-y-2">
+              {requiredSteps.map((step) => (
+                <div
+                  key={step.id}
+                  className={`flex items-start gap-3 p-3 rounded-lg border ${
+                    step.completed 
+                      ? "bg-primary/5 border-primary/20" 
+                      : "bg-muted/50 border-border"
+                  }`}
+                >
+                  {step.completed ? (
+                    <CheckCircle className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                  )}
+                  <div className="min-w-0">
+                    <p className={`font-medium text-sm ${step.completed ? "text-primary" : ""}`}>
+                      {step.label}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {step.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* CTA Button */}
+          <div className="pt-2">
+            <Button 
+              className="w-full" 
+              onClick={() => {
+                // Find the verification tab trigger and click it
+                const verificationTab = document.querySelector('[value="verification"]') as HTMLButtonElement;
+                if (verificationTab) {
+                  verificationTab.click();
+                }
+              }}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Complete Verification
+            </Button>
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Navigate to the Verification tab to complete missing steps
+            </p>
+          </div>
         </CardContent>
       </Card>
     );
@@ -506,12 +573,15 @@ const SellVehicleTab = ({ vehicle, isVerified }: SellVehicleTabProps) => {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Confirm Listing Submission</AlertDialogTitle>
-              <AlertDialogDescription>
-                You are about to list <strong>{vehicle.registration_number}</strong> for sale at{" "}
-                <strong>{formatCurrency(parseFloat(expectedPrice) || 0)}</strong>.
-                <br /><br />
-                Your listing will be reviewed by an admin before being published.
-                You can cancel the listing while it's pending review.
+              <AlertDialogDescription className="space-y-2">
+                <p>
+                  You are about to list your vehicle for sale at{" "}
+                  <strong>{formatCurrency(parseFloat(expectedPrice) || 0)}</strong>.
+                </p>
+                <p>
+                  Your listing will be reviewed by our admin team. Once approved,
+                  it will be visible to potential buyers.
+                </p>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
