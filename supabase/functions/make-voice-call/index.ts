@@ -230,22 +230,73 @@ serve(async (req) => {
 
     const userLanguage = profile.preferred_language || "en";
 
-    // 9. Fetch language template
+    // 9. Fetch language template with all fields
     const { data: languageTemplate } = await supabase
       .from("voice_language_templates")
-      .select("language_instruction, welcome_message")
+      .select("system_prompt, welcome_message, language_instruction")
       .eq("language_code", userLanguage)
       .eq("is_active", true)
       .maybeSingle();
 
+    // Fallback to English if user's language not found
+    let activeTemplate = languageTemplate;
+    if (!activeTemplate && userLanguage !== "en") {
+      const { data: englishTemplate } = await supabase
+        .from("voice_language_templates")
+        .select("system_prompt, welcome_message, language_instruction")
+        .eq("language_code", "en")
+        .eq("is_active", true)
+        .maybeSingle();
+      activeTemplate = englishTemplate;
+    }
+
     // Build language-specific content
     const daysMessage = getDaysMessage(daysUntilExpiry, userLanguage);
     const docLabel = DOCUMENT_LABELS[documentType]?.[userLanguage] || DOCUMENT_LABELS[documentType]?.["en"] || documentType;
-    const languageInstruction = languageTemplate?.language_instruction || "Speak in clear, professional English.";
+    
+    // Helper function to replace template placeholders
+    const replacePlaceholders = (template: string): string => {
+      return template
+        .replace(/\{\{owner_name\}\}/g, vehicleOwnerName || "Sir/Madam")
+        .replace(/\{\{vehicle_number\}\}/g, vehicleRegNumber || "your vehicle")
+        .replace(/\{\{document_type\}\}/g, docLabel)
+        .replace(/\{\{days_message\}\}/g, daysMessage);
+    };
+
+    // Build final content with placeholders replaced
+    const languageInstruction = activeTemplate?.language_instruction || "Speak in clear, professional English.";
+    const welcomeMessage = activeTemplate?.welcome_message 
+      ? replacePlaceholders(activeTemplate.welcome_message)
+      : `Hello ${vehicleOwnerName}! This is CertChaperone calling about your vehicle ${vehicleRegNumber}.`;
+    const systemPromptOverride = activeTemplate?.system_prompt 
+      ? replacePlaceholders(activeTemplate.system_prompt)
+      : null;
 
     // ============= PHASE 5: MAKE THE CALL =============
 
     console.log(`Making voice call to ${profile.phone_number.slice(0, 6)}**** via agent ${agentConfig.bolna_agent_id} in ${userLanguage}`);
+    console.log(`Using welcome message: "${welcomeMessage.slice(0, 50)}..."`);
+
+    // Build request body with dynamic content
+    const callRequestBody: Record<string, unknown> = {
+      agent_id: agentConfig.bolna_agent_id,
+      recipient_phone_number: profile.phone_number,
+      from_phone_number: INDIAN_CALLER_ID,
+      user_data: {
+        owner_name: vehicleOwnerName,
+        vehicle_number: vehicleRegNumber,
+        document_type: docLabel,
+        days_message: daysMessage,
+        language: userLanguage,
+        language_instruction: languageInstruction,
+        welcome_message: welcomeMessage,
+      },
+    };
+
+    // Add dynamic agent prompt if we have a language-specific system prompt
+    if (systemPromptOverride) {
+      callRequestBody.agent_prompt = systemPromptOverride;
+    }
 
     const callResponse = await fetch(`${BOLNA_API_BASE}/call`, {
       method: "POST",
@@ -253,19 +304,7 @@ serve(async (req) => {
         Authorization: `Bearer ${bolnaApiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        agent_id: agentConfig.bolna_agent_id,
-        recipient_phone_number: profile.phone_number,
-        from_phone_number: INDIAN_CALLER_ID,
-        user_data: {
-          owner_name: vehicleOwnerName,
-          vehicle_number: vehicleRegNumber,
-          document_type: docLabel,
-          days_message: daysMessage,
-          language: userLanguage,
-          language_instruction: languageInstruction,
-        },
-      }),
+      body: JSON.stringify(callRequestBody),
     });
 
     if (!callResponse.ok) {
