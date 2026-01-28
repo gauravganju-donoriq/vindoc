@@ -32,6 +32,7 @@ import UploadConsentDialog from "@/components/vehicle/UploadConsentDialog";
 import VehicleVerificationSection from "@/components/vehicle/VehicleVerificationSection";
 import VehicleProfileImage from "@/components/vehicle/VehicleProfileImage";
 import VerificationProgress from "@/components/vehicle/VerificationProgress";
+import ExpiryIntelligence from "@/components/vehicle/ExpiryIntelligence";
 import { logVehicleEvent } from "@/lib/vehicleHistory";
 import { calculateVerificationProgress } from "@/lib/verificationChecks";
 import { toTitleCase } from "@/lib/utils";
@@ -940,9 +941,11 @@ const VehicleDetails = () => {
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="mt-0">
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Left Column */}
-              <div className="space-y-6">
+            <div className="space-y-6">
+              {/* Expiry Intelligence - Top of Overview */}
+              <ExpiryIntelligence vehicle={vehicle} />
+
+              <div className="grid gap-6 lg:grid-cols-2">
                 {/* Vehicle Identity */}
                 <div className="bg-background border border-border rounded-lg p-6">
                   <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
