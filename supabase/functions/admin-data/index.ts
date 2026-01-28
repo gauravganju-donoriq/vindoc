@@ -523,6 +523,107 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case "listings": {
+        // Get all vehicle listings
+        const { data: listingsData } = await adminClient
+          .from("vehicle_listings")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        const enrichedListings = await Promise.all(
+          (listingsData || []).map(async (l: any) => {
+            const { data: userData } = await adminClient.auth.admin.getUserById(l.user_id);
+            const { data: vehicleData } = await adminClient
+              .from("vehicles")
+              .select("registration_number, maker_model, manufacturer")
+              .eq("id", l.vehicle_id)
+              .maybeSingle();
+
+            return {
+              ...l,
+              userEmail: userData?.user?.email || "Unknown",
+              registrationNumber: vehicleData?.registration_number || "Deleted",
+              makerModel: vehicleData?.maker_model || null,
+              manufacturer: vehicleData?.manufacturer || null,
+            };
+          })
+        );
+
+        responseData = { listings: enrichedListings };
+        break;
+      }
+
+      case "update_listing_status": {
+        const listingId = body?.listingId as string;
+        const newStatus = body?.status as string;
+        const adminNotes = body?.adminNotes as string | null;
+
+        if (!listingId || !newStatus) {
+          return new Response(
+            JSON.stringify({ error: "listingId and status are required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (!["approved", "rejected", "on_hold"].includes(newStatus)) {
+          return new Response(
+            JSON.stringify({ error: "Invalid status value" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Get listing info for logging
+        const { data: listingData } = await adminClient
+          .from("vehicle_listings")
+          .select("vehicle_id, user_id, expected_price")
+          .eq("id", listingId)
+          .single();
+
+        if (!listingData) {
+          return new Response(
+            JSON.stringify({ error: "Listing not found" }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const { error: updateError } = await adminClient
+          .from("vehicle_listings")
+          .update({
+            status: newStatus,
+            admin_notes: adminNotes,
+            reviewed_by: userId,
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq("id", listingId);
+
+        if (updateError) {
+          console.error("Listing update error:", updateError);
+          return new Response(
+            JSON.stringify({ error: "Failed to update listing status" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Log to vehicle history
+        const eventType = newStatus === "approved" ? "listing_approved" :
+                          newStatus === "rejected" ? "listing_rejected" : "listing_on_hold";
+        
+        await adminClient.from("vehicle_history").insert({
+          vehicle_id: listingData.vehicle_id,
+          user_id: listingData.user_id,
+          event_type: eventType,
+          event_description: `Listing ${newStatus} by admin`,
+          metadata: {
+            admin_email: userEmail,
+            admin_notes: adminNotes,
+            expected_price: listingData.expected_price,
+          },
+        });
+
+        responseData = { success: true, message: `Listing marked as ${newStatus}` };
+        break;
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: "Invalid type parameter" }),

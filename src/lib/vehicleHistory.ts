@@ -19,7 +19,12 @@ export type VehicleEventType =
   | "service_updated"
   | "service_deleted"
   | "service_reminder"
-  | "expiry_alert";
+  | "expiry_alert"
+  | "listing_created"
+  | "listing_approved"
+  | "listing_rejected"
+  | "listing_on_hold"
+  | "listing_cancelled";
 
 interface LogEventParams {
   vehicleId: string;
@@ -78,6 +83,11 @@ export function getEventIcon(eventType: VehicleEventType): string {
     service_deleted: "🗑️",
     service_reminder: "🔔",
     expiry_alert: "📬",
+    listing_created: "💰",
+    listing_approved: "✅",
+    listing_rejected: "❌",
+    listing_on_hold: "⏸️",
+    listing_cancelled: "🚫",
   };
   return icons[eventType] || "📝";
 }
@@ -103,6 +113,11 @@ export function getEventColor(eventType: VehicleEventType): string {
     service_deleted: "text-red-600",
     service_reminder: "text-amber-600",
     expiry_alert: "text-amber-600",
+    listing_created: "text-primary",
+    listing_approved: "text-green-600",
+    listing_rejected: "text-red-600",
+    listing_on_hold: "text-amber-600",
+    listing_cancelled: "text-muted-foreground",
   };
   return colors[eventType] || "text-foreground";
 }
