@@ -164,9 +164,11 @@ const Dashboard = () => {
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Car className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-semibold">Vehicle Manager</h1>
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
+              <Shield className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <h1 className="text-lg font-semibold">Valt</h1>
           </div>
           <div className="flex items-center gap-2">
             {isAdmin && (
@@ -194,8 +196,8 @@ const Dashboard = () => {
 
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-bold">My Vehicles</h2>
-            <p className="text-muted-foreground">
+            <h2 className="text-xl font-semibold">My Vehicles</h2>
+            <p className="text-sm text-muted-foreground">
               {vehicles.length === 0
                 ? "Add your first vehicle to get started"
                 : `${vehicles.length} vehicle${vehicles.length > 1 ? "s" : ""} registered`}
