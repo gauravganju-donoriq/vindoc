@@ -147,7 +147,6 @@ serve(async (req) => {
       body: JSON.stringify({
         agent_id: agentConfig.bolna_agent_id,
         recipient_phone_number: profile.phone_number,
-        from_phone_number: "+918035452070",
         user_data: {
           owner_name: vehicleOwnerName,
           vehicle_number: vehicleRegNumber,
