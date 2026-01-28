@@ -13,6 +13,9 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["Inter", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -30,6 +33,14 @@ export default {
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -62,6 +73,13 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      boxShadow: {
+        "soft-sm": "0 1px 2px 0 hsl(220 20% 18% / 0.03)",
+        "soft": "0 1px 3px 0 hsl(220 20% 18% / 0.06), 0 1px 2px -1px hsl(220 20% 18% / 0.06)",
+        "soft-md": "0 4px 6px -1px hsl(220 20% 18% / 0.06), 0 2px 4px -2px hsl(220 20% 18% / 0.06)",
+        "soft-lg": "0 10px 15px -3px hsl(220 20% 18% / 0.06), 0 4px 6px -4px hsl(220 20% 18% / 0.06)",
+        "soft-xl": "0 20px 25px -5px hsl(220 20% 18% / 0.06), 0 8px 10px -6px hsl(220 20% 18% / 0.06)",
       },
       keyframes: {
         "accordion-down": {
