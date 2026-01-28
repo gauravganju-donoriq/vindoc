@@ -43,6 +43,7 @@ interface ServiceRecord {
 interface ServiceHistoryProps {
   vehicleId: string;
   registrationNumber: string;
+  variant?: "card" | "inline";
 }
 
 const serviceTypeLabels: Record<string, { label: string; color: string }> = {
@@ -58,7 +59,7 @@ const serviceTypeLabels: Record<string, { label: string; color: string }> = {
   other: { label: "Other", color: "bg-muted-foreground" },
 };
 
-const ServiceHistory = ({ vehicleId, registrationNumber }: ServiceHistoryProps) => {
+const ServiceHistory = ({ vehicleId, registrationNumber, variant = "card" }: ServiceHistoryProps) => {
   const [records, setRecords] = useState<ServiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -159,57 +160,43 @@ const ServiceHistory = ({ vehicleId, registrationNumber }: ServiceHistoryProps) 
 
   const nextServiceStatus = getNextServiceStatus();
 
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wrench className="h-5 w-5" />
-            Service History
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="animate-pulse space-y-3">
-            <div className="h-20 bg-muted rounded-lg" />
-            <div className="h-20 bg-muted rounded-lg" />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
+  const content = (
     <>
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Wrench className="h-5 w-5" />
-                Service History
-              </CardTitle>
-              <CardDescription>
-                Track maintenance, repairs, and service costs
-              </CardDescription>
-            </div>
-            <Button onClick={() => setShowAddDialog(true)} size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Service
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      {/* Header with Add Button */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-lg font-medium flex items-center gap-2">
+            <Wrench className="h-5 w-5 text-muted-foreground" />
+            Service History
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Track maintenance, repairs, and service costs
+          </p>
+        </div>
+        <Button onClick={() => setShowAddDialog(true)} size="sm">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Service
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="animate-pulse space-y-3">
+          <div className="h-20 bg-muted rounded-lg" />
+          <div className="h-20 bg-muted rounded-lg" />
+        </div>
+      ) : (
+        <div className="space-y-6">
           {/* Summary Cards */}
           {records.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="p-3 rounded-lg bg-muted/50 border">
+              <div className="p-3 rounded-lg bg-muted/50 border border-border">
                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                   <FileText className="h-4 w-4" />
                   Total Records
                 </div>
                 <p className="text-xl font-semibold">{records.length}</p>
               </div>
-              <div className="p-3 rounded-lg bg-muted/50 border">
+              <div className="p-3 rounded-lg bg-muted/50 border border-border">
                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                   <IndianRupee className="h-4 w-4" />
                   Total Spent
@@ -217,7 +204,7 @@ const ServiceHistory = ({ vehicleId, registrationNumber }: ServiceHistoryProps) 
                 <p className="text-xl font-semibold">₹{totalCost.toLocaleString("en-IN")}</p>
               </div>
               {lastOdometer && (
-                <div className="p-3 rounded-lg bg-muted/50 border">
+                <div className="p-3 rounded-lg bg-muted/50 border border-border">
                   <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                     <Gauge className="h-4 w-4" />
                     Last Odometer
@@ -226,7 +213,7 @@ const ServiceHistory = ({ vehicleId, registrationNumber }: ServiceHistoryProps) 
                 </div>
               )}
               {nextServiceStatus && (
-                <div className="p-3 rounded-lg bg-muted/50 border">
+                <div className="p-3 rounded-lg bg-muted/50 border border-border">
                   <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                     <Clock className="h-4 w-4" />
                     Next Service
@@ -239,7 +226,7 @@ const ServiceHistory = ({ vehicleId, registrationNumber }: ServiceHistoryProps) 
 
           {/* Service Records Timeline */}
           {records.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 text-muted-foreground border border-dashed border-border rounded-lg">
               <Wrench className="h-12 w-12 mx-auto mb-2 opacity-50" />
               <p>No service records yet</p>
               <p className="text-sm">Add your first service record to start tracking</p>
@@ -253,7 +240,7 @@ const ServiceHistory = ({ vehicleId, registrationNumber }: ServiceHistoryProps) 
                 return (
                   <div 
                     key={record.id} 
-                    className="relative border rounded-lg overflow-hidden transition-all hover:shadow-sm"
+                    className="relative border border-border rounded-lg overflow-hidden transition-all hover:border-border/80 bg-background"
                   >
                     {/* Timeline indicator */}
                     {index < records.length - 1 && (
@@ -316,7 +303,7 @@ const ServiceHistory = ({ vehicleId, registrationNumber }: ServiceHistoryProps) 
                     
                     {/* Expanded details */}
                     {isExpanded && (
-                      <div className="px-4 pb-4 pt-0 border-t bg-muted/30">
+                      <div className="px-4 pb-4 pt-0 border-t border-border bg-muted/30">
                         <div className="pt-3 space-y-3">
                           {record.notes && (
                             <div>
@@ -374,8 +361,8 @@ const ServiceHistory = ({ vehicleId, registrationNumber }: ServiceHistoryProps) 
               })}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
       {/* Add/Edit Dialog */}
       <AddServiceRecordDialog
@@ -413,6 +400,22 @@ const ServiceHistory = ({ vehicleId, registrationNumber }: ServiceHistoryProps) 
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+
+  if (variant === "inline") {
+    return (
+      <div className="bg-background border border-border rounded-lg p-6">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        {content}
+      </CardContent>
+    </Card>
   );
 };
 

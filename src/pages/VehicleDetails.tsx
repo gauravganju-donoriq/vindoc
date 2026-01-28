@@ -3,14 +3,15 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   ArrowLeft, Upload, FileText, Trash2, Download, 
   AlertTriangle, CheckCircle, Clock, Car, Calendar, Shield,
   Settings, User, Fuel, Palette, Users, Banknote, Hash,
-  Gauge, Weight, FileCheck, RefreshCw, Loader2, Pencil, Save, X, Sparkles
+  Gauge, Weight, FileCheck, RefreshCw, Loader2, Pencil, Save, X, Sparkles,
+  LayoutGrid, FileStack, Wrench, History
 } from "lucide-react";
 import { format, differenceInDays, isPast, formatDistanceToNow } from "date-fns";
 import {
@@ -22,7 +23,6 @@ import {
 } from "@/components/ui/select";
 import DetailItem from "@/components/vehicle/DetailItem";
 import EditableDetailItem from "@/components/vehicle/EditableDetailItem";
-import SectionCard from "@/components/vehicle/SectionCard";
 import { useRefreshVehicle } from "@/hooks/useRefreshVehicle";
 import TransferVehicleDialog from "@/components/vehicle/TransferVehicleDialog";
 import VehicleHistory from "@/components/vehicle/VehicleHistory";
@@ -524,7 +524,7 @@ const VehicleDetails = () => {
       const { data: insertedDoc, error: dbError } = await supabase.from("documents").insert({
         vehicle_id: id,
         user_id: user.id,
-        document_type: selectedDocType === "auto" ? "other" : selectedDocType, // Store as "other" until AI detects type
+        document_type: selectedDocType === "auto" ? "other" : selectedDocType,
         document_name: file.name,
         file_path: filePath,
         file_size: file.size,
@@ -735,8 +735,9 @@ const VehicleDetails = () => {
   const hasChanges = Object.keys(pendingChanges).length > 0;
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
+    <div className="min-h-screen bg-muted/30">
+      {/* Header */}
+      <header className="border-b bg-background">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
@@ -753,550 +754,624 @@ const VehicleDetails = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* Enhanced Vehicle Header */}
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-4">
-                {vehicle.verification_photo_path ? (
-                  <div className="relative w-20 h-20 rounded-lg overflow-hidden border-2 border-primary/20 shadow-md">
-                    <VehicleProfileImage filePath={vehicle.verification_photo_path} />
-                  </div>
-                ) : (
-                  <div className="p-3 bg-primary/10 rounded-lg">
-                    <Car className="h-8 w-8 text-primary" />
-                  </div>
-                )}
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <CardTitle className="text-xl font-mono">{vehicle.registration_number}</CardTitle>
-                    {vehicle.rc_status && (
-                      <Badge variant={vehicle.rc_status === "ACTIVE" ? "default" : "destructive"}>
-                        {vehicle.rc_status}
-                      </Badge>
-                    )}
-                  </div>
-                  <CardDescription className="text-base">
-                    {vehicle.manufacturer && <span>{vehicle.manufacturer}</span>}
-                    {vehicle.maker_model && vehicle.manufacturer && " • "}
-                    {vehicle.maker_model && <span>{vehicle.maker_model}</span>}
-                    {!vehicle.manufacturer && !vehicle.maker_model && "Vehicle Details"}
-                  </CardDescription>
+      <main className="container mx-auto px-4 py-6 max-w-6xl">
+        {/* Vehicle Hero Section */}
+        <div className="bg-background border border-border rounded-lg p-6 mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+            {/* Left: Vehicle Info */}
+            <div className="flex items-start gap-4">
+              {vehicle.verification_photo_path ? (
+                <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-border flex-shrink-0">
+                  <VehicleProfileImage filePath={vehicle.verification_photo_path} />
                 </div>
-              </div>
-              <div className="flex flex-col items-end gap-2">
-                <div className="flex gap-2">
-                  {isEditing ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCancelEdit}
-                        disabled={isSaving}
-                      >
-                        <X className="h-4 w-4 mr-2" />
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleSaveChanges}
-                        disabled={isSaving || !hasChanges}
-                      >
-                        {isSaving ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <Save className="h-4 w-4 mr-2" />
-                            Save Changes
-                          </>
-                        )}
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setIsEditing(true)}
-                      >
-                        <Pencil className="h-4 w-4 mr-2" />
-                        Edit Details
-                      </Button>
-                      <TransferVehicleDialog
-                        vehicleId={vehicle.id}
-                        vehicleNumber={vehicle.registration_number}
-                        vehicleModel={vehicle.maker_model || vehicle.manufacturer}
-                        onTransferInitiated={fetchVehicle}
-                      />
-                      <Button
-                        variant={canRefresh ? "default" : "outline"}
-                        size="sm"
-                        onClick={refreshVehicleData}
-                        disabled={!canRefresh || isRefreshing}
-                      >
-                        {isRefreshing ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Refreshing...
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw className="h-4 w-4 mr-2" />
-                            Refresh Data
-                          </>
-                        )}
-                      </Button>
-                    </>
+              ) : (
+                <div className="w-20 h-20 bg-muted rounded-lg flex items-center justify-center flex-shrink-0 border border-border">
+                  <Car className="h-8 w-8 text-muted-foreground" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="flex items-center gap-3 mb-1 flex-wrap">
+                  <h2 className="text-2xl font-mono font-semibold">{vehicle.registration_number}</h2>
+                  {vehicle.rc_status && (
+                    <Badge variant={vehicle.rc_status === "ACTIVE" ? "default" : "destructive"}>
+                      {vehicle.rc_status}
+                    </Badge>
+                  )}
+                  {vehicle.is_verified && (
+                    <Badge variant="outline" className="text-green-600 border-green-600">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Verified
+                    </Badge>
                   )}
                 </div>
-                <span className="text-xs text-muted-foreground">
-                  {isEditing ? (
-                    hasChanges ? `${Object.keys(pendingChanges).length} unsaved change(s)` : "Click on fields to edit"
-                  ) : vehicle.data_last_fetched_at ? (
-                    timeUntilRefresh ? (
-                      `Can refresh in ${timeUntilRefresh.hours}h ${timeUntilRefresh.minutes}m`
-                    ) : (
-                      `Last updated ${formatDistanceToNow(new Date(vehicle.data_last_fetched_at), { addSuffix: true })}`
-                    )
-                  ) : (
-                    "Never fetched – Refresh now"
+                <p className="text-muted-foreground">
+                  {vehicle.manufacturer && <span>{vehicle.manufacturer}</span>}
+                  {vehicle.maker_model && vehicle.manufacturer && " • "}
+                  {vehicle.maker_model && <span>{vehicle.maker_model}</span>}
+                  {!vehicle.manufacturer && !vehicle.maker_model && "Vehicle Details"}
+                </p>
+                {/* Quick Stats */}
+                <div className="flex flex-wrap gap-4 mt-3 text-sm">
+                  {vehicle.fuel_type && (
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Fuel className="h-4 w-4" />
+                      <span>{vehicle.fuel_type}</span>
+                    </div>
                   )}
-                </span>
+                  {registrationYear && (
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Calendar className="h-4 w-4" />
+                      <span>{registrationYear}</span>
+                    </div>
+                  )}
+                  {vehicle.owner_count !== null && (
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Users className="h-4 w-4" />
+                      <span>{vehicle.owner_count === 1 ? "1st Owner" : `${vehicle.owner_count} Owners`}</span>
+                    </div>
+                  )}
+                  {vehicle.color && (
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Palette className="h-4 w-4" />
+                      <span>{vehicle.color}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-4 text-sm">
-              {vehicle.fuel_type && (
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <Fuel className="h-4 w-4" />
-                  <span>{vehicle.fuel_type}</span>
-                </div>
-              )}
-              {registrationYear && (
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <Calendar className="h-4 w-4" />
-                  <span>Registered {registrationYear}</span>
-                </div>
-              )}
-              {vehicle.owner_count !== null && (
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <Users className="h-4 w-4" />
-                  <span>{vehicle.owner_count === 1 ? "1st Owner" : `${vehicle.owner_count} Owners`}</span>
-                </div>
-              )}
-              {vehicle.color && (
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <Palette className="h-4 w-4" />
-                  <span>{vehicle.color}</span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Verification Progress Section */}
-        <VerificationProgress 
-          progress={calculateVerificationProgress(vehicle, documents)} 
-        />
-
-        {/* Photo Verification Section */}
-        <VehicleVerificationSection
-          vehicleId={vehicle.id}
-          registrationNumber={vehicle.registration_number}
-          isVerified={vehicle.is_verified}
-          verifiedAt={vehicle.verified_at}
-          verificationPhotoPath={vehicle.verification_photo_path}
-          onVerificationComplete={fetchVehicle}
-        />
-
-        {/* Vehicle Identity Section */}
-        <SectionCard title="Vehicle Identity" icon={<Car className="h-5 w-5" />}>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <DetailItem label="Registration Number" value={vehicle.registration_number} />
-            <EditableDetailItem
-              label="Manufacturer"
-              value={getCurrentValue("manufacturer")}
-              fieldName="manufacturer"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-            />
-            <EditableDetailItem
-              label="Model"
-              value={getCurrentValue("maker_model")}
-              fieldName="maker_model"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-            />
-            <EditableDetailItem
-              label="Vehicle Class"
-              value={getCurrentValue("vehicle_class")}
-              fieldName="vehicle_class"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-            />
-            <EditableDetailItem
-              label="Vehicle Category"
-              value={getCurrentValue("vehicle_category")}
-              fieldName="vehicle_category"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-            />
-            <EditableDetailItem
-              label="Body Type"
-              value={getCurrentValue("body_type")}
-              fieldName="body_type"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-            />
-            <EditableDetailItem
-              label="Color"
-              value={getCurrentValue("color")}
-              fieldName="color"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-            />
-            <EditableDetailItem
-              label="Registration Date"
-              value={getCurrentValue("registration_date")}
-              fieldName="registration_date"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              inputType="date"
-            />
-            <div className="space-y-1">
-              <span className="text-sm text-muted-foreground">RC Status</span>
-              <div>
-                {vehicle.rc_status ? (
-                  <Badge variant={vehicle.rc_status === "ACTIVE" ? "default" : "destructive"}>
-                    {vehicle.rc_status}
-                  </Badge>
-                ) : (
-                  <p className="font-medium text-muted-foreground italic">Not Available</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </SectionCard>
-
-        {/* Technical Specifications Section */}
-        <SectionCard title="Technical Specifications" icon={<Settings className="h-5 w-5" />}>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <EditableDetailItem
-              label="Engine Number"
-              value={getCurrentValue("engine_number")}
-              fieldName="engine_number"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              icon={<Hash className="h-3.5 w-3.5" />}
-            />
-            <EditableDetailItem
-              label="Chassis Number"
-              value={getCurrentValue("chassis_number")}
-              fieldName="chassis_number"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              icon={<Hash className="h-3.5 w-3.5" />}
-            />
-            <EditableDetailItem
-              label="Cubic Capacity (cc)"
-              value={getCurrentValue("cubic_capacity")}
-              fieldName="cubic_capacity"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              inputType="number"
-              icon={<Gauge className="h-3.5 w-3.5" />}
-            />
-            <EditableDetailItem
-              label="Fuel Type"
-              value={getCurrentValue("fuel_type")}
-              fieldName="fuel_type"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              icon={<Fuel className="h-3.5 w-3.5" />}
-            />
-            <EditableDetailItem
-              label="Seating Capacity"
-              value={getCurrentValue("seating_capacity")}
-              fieldName="seating_capacity"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              inputType="number"
-              icon={<Users className="h-3.5 w-3.5" />}
-            />
-            <EditableDetailItem
-              label="Emission Norms"
-              value={getCurrentValue("emission_norms")}
-              fieldName="emission_norms"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              icon={<FileCheck className="h-3.5 w-3.5" />}
-            />
-            <EditableDetailItem
-              label="Wheelbase"
-              value={getCurrentValue("wheelbase")}
-              fieldName="wheelbase"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              icon={<Weight className="h-3.5 w-3.5" />}
-            />
-            <EditableDetailItem
-              label="Gross Vehicle Weight"
-              value={getCurrentValue("gross_vehicle_weight")}
-              fieldName="gross_vehicle_weight"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              icon={<Weight className="h-3.5 w-3.5" />}
-            />
-            <EditableDetailItem
-              label="Unladen Weight"
-              value={getCurrentValue("unladen_weight")}
-              fieldName="unladen_weight"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              icon={<Weight className="h-3.5 w-3.5" />}
-            />
-          </div>
-        </SectionCard>
-
-        {/* Ownership & Finance Section */}
-        <SectionCard title="Ownership & Finance" icon={<User className="h-5 w-5" />}>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <EditableDetailItem
-              label="Owner Name"
-              value={getCurrentValue("owner_name")}
-              fieldName="owner_name"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              icon={<User className="h-3.5 w-3.5" />}
-            />
-            <EditableDetailItem
-              label="Owner Count"
-              value={getCurrentValue("owner_count")}
-              fieldName="owner_count"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              inputType="number"
-              icon={<Users className="h-3.5 w-3.5" />}
-            />
-            <div className="space-y-1">
-              <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                <Banknote className="h-3.5 w-3.5" />
-                Finance Status
-              </span>
-              <div>
-                <Badge variant={vehicle.is_financed ? "destructive" : "default"}>
-                  {vehicle.is_financed ? "Financed" : "Not Financed"}
-                </Badge>
-              </div>
-            </div>
-            <EditableDetailItem
-              label="Financer"
-              value={getCurrentValue("financer")}
-              fieldName="financer"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              icon={<Banknote className="h-3.5 w-3.5" />}
-            />
-            <EditableDetailItem
-              label="NOC Details"
-              value={getCurrentValue("noc_details")}
-              fieldName="noc_details"
-              isEditing={isEditing}
-              onChange={handleFieldChange}
-              icon={<FileCheck className="h-3.5 w-3.5" />}
-            />
-          </div>
-        </SectionCard>
-
-        {/* Document Expiry Status */}
-        <SectionCard title="Document Expiry Status" icon={<Calendar className="h-5 w-5" />}>
-          {isEditing ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <EditableDetailItem
-                label="Insurance Expiry"
-                value={getCurrentValue("insurance_expiry")}
-                fieldName="insurance_expiry"
-                isEditing={isEditing}
-                onChange={handleFieldChange}
-                inputType="date"
-              />
-              <EditableDetailItem
-                label="Insurance Company"
-                value={getCurrentValue("insurance_company")}
-                fieldName="insurance_company"
-                isEditing={isEditing}
-                onChange={handleFieldChange}
-              />
-              <EditableDetailItem
-                label="PUCC Valid Until"
-                value={getCurrentValue("pucc_valid_upto")}
-                fieldName="pucc_valid_upto"
-                isEditing={isEditing}
-                onChange={handleFieldChange}
-                inputType="date"
-              />
-              <EditableDetailItem
-                label="Fitness Valid Until"
-                value={getCurrentValue("fitness_valid_upto")}
-                fieldName="fitness_valid_upto"
-                isEditing={isEditing}
-                onChange={handleFieldChange}
-                inputType="date"
-              />
-              <EditableDetailItem
-                label="Road Tax Valid Until"
-                value={getCurrentValue("road_tax_valid_upto")}
-                fieldName="road_tax_valid_upto"
-                isEditing={isEditing}
-                onChange={handleFieldChange}
-                inputType="date"
-              />
-            </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {expiryItems.map((item) => {
-                const status = getExpiryStatus(item.date);
-                return (
-                  <div key={item.label} className="flex items-center justify-between p-3 rounded-lg border">
-                    <div>
-                      <p className="font-medium">{item.label}</p>
-                      {item.date ? (
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(item.date), "dd MMM yyyy")}
-                          {item.company && ` • ${item.company}`}
-                        </p>
+            {/* Right: Actions */}
+            <div className="flex flex-col items-end gap-2 flex-shrink-0">
+              <div className="flex flex-wrap gap-2 justify-end">
+                {isEditing ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancelEdit}
+                      disabled={isSaving}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveChanges}
+                      disabled={isSaving || !hasChanges}
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
                       ) : (
-                        <p className="text-sm text-muted-foreground">Not available</p>
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Save Changes
+                        </>
                       )}
-                    </div>
-                    {status && (
-                      <Badge variant={status.variant} className="flex items-center gap-1">
-                        <status.icon className="h-3 w-3" />
-                        {status.label}
-                      </Badge>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </SectionCard>
-
-        {/* Document Repository */}
-        <SectionCard title="Document Repository" icon={<Shield className="h-5 w-5" />}>
-          <div className="mb-4">
-            <p className="text-sm text-muted-foreground mb-4">
-              Upload documents to store them and optionally extract data using AI
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <Label htmlFor="docType">Document Type</Label>
-                <Select value={selectedDocType} onValueChange={setSelectedDocType}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {documentTypes.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-end">
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileSelect}
-                  accept=".pdf,.jpg,.jpeg,.png,.webp"
-                  className="hidden"
-                />
-                <Button 
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading || isAnalyzing}
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <Sparkles className="h-4 w-4 mr-2 animate-pulse" />
-                      Analyzing...
-                    </>
-                  ) : uploading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4 mr-2" />
-                      Upload Document
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-            {isAnalyzing && (
-              <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-                <Sparkles className="h-4 w-4 text-primary animate-pulse" />
-                <span>AI is analyzing your document to extract vehicle data...</span>
-              </div>
-            )}
-          </div>
-
-          {documents.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p>No documents uploaded yet</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {documents.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg border">
-                  <div className="flex items-center gap-3">
-                    <FileText className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium text-sm">{doc.document_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {documentTypes.find((t) => t.value === doc.document_type)?.label} • 
-                        {format(new Date(doc.uploaded_at), " dd MMM yyyy")}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    {doc.file_path.match(/\.(jpg|jpeg|png|webp)$/i) && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => handleReanalyzeDocument(doc)}
-                        disabled={isAnalyzing}
-                        title="Scan with AI"
-                      >
-                        <Sparkles className="h-4 w-4 text-primary" />
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="sm" onClick={() => handleDownload(doc)} title="Download">
-                      <Download className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteDocument(doc)} title="Delete">
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditing(true)}
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                    <TransferVehicleDialog
+                      vehicleId={vehicle.id}
+                      vehicleNumber={vehicle.registration_number}
+                      vehicleModel={vehicle.maker_model || vehicle.manufacturer}
+                      onTransferInitiated={fetchVehicle}
+                    />
+                    <Button
+                      variant={canRefresh ? "default" : "outline"}
+                      size="sm"
+                      onClick={refreshVehicleData}
+                      disabled={!canRefresh || isRefreshing}
+                    >
+                      {isRefreshing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Refreshing...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Refresh
+                        </>
+                      )}
+                    </Button>
+                  </>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {isEditing ? (
+                  hasChanges ? `${Object.keys(pendingChanges).length} unsaved change(s)` : "Click on fields to edit"
+                ) : vehicle.data_last_fetched_at ? (
+                  timeUntilRefresh ? (
+                    `Can refresh in ${timeUntilRefresh.hours}h ${timeUntilRefresh.minutes}m`
+                  ) : (
+                    `Updated ${formatDistanceToNow(new Date(vehicle.data_last_fetched_at), { addSuffix: true })}`
+                  )
+                ) : (
+                  "Never fetched – Refresh now"
+                )}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="w-full justify-start bg-background border border-border rounded-lg h-auto p-1 mb-6">
+            <TabsTrigger value="overview" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <LayoutGrid className="h-4 w-4" />
+              <span className="hidden sm:inline">Overview</span>
+            </TabsTrigger>
+            <TabsTrigger value="documents" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <FileStack className="h-4 w-4" />
+              <span className="hidden sm:inline">Documents</span>
+            </TabsTrigger>
+            <TabsTrigger value="service" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <Wrench className="h-4 w-4" />
+              <span className="hidden sm:inline">Service</span>
+            </TabsTrigger>
+            <TabsTrigger value="activity" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <History className="h-4 w-4" />
+              <span className="hidden sm:inline">Activity</span>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="mt-0">
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Left Column */}
+              <div className="space-y-6">
+                {/* Vehicle Identity */}
+                <div className="bg-background border border-border rounded-lg p-6">
+                  <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
+                    <Car className="h-5 w-5 text-muted-foreground" />
+                    Vehicle Identity
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <DetailItem label="Registration Number" value={vehicle.registration_number} />
+                    <EditableDetailItem
+                      label="Manufacturer"
+                      value={getCurrentValue("manufacturer")}
+                      fieldName="manufacturer"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                    />
+                    <EditableDetailItem
+                      label="Model"
+                      value={getCurrentValue("maker_model")}
+                      fieldName="maker_model"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                    />
+                    <EditableDetailItem
+                      label="Vehicle Class"
+                      value={getCurrentValue("vehicle_class")}
+                      fieldName="vehicle_class"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                    />
+                    <EditableDetailItem
+                      label="Vehicle Category"
+                      value={getCurrentValue("vehicle_category")}
+                      fieldName="vehicle_category"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                    />
+                    <EditableDetailItem
+                      label="Body Type"
+                      value={getCurrentValue("body_type")}
+                      fieldName="body_type"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                    />
+                    <EditableDetailItem
+                      label="Color"
+                      value={getCurrentValue("color")}
+                      fieldName="color"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                    />
+                    <EditableDetailItem
+                      label="Registration Date"
+                      value={getCurrentValue("registration_date")}
+                      fieldName="registration_date"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      inputType="date"
+                    />
+                    <div className="space-y-1">
+                      <span className="text-sm text-muted-foreground">RC Status</span>
+                      <div>
+                        {vehicle.rc_status ? (
+                          <Badge variant={vehicle.rc_status === "ACTIVE" ? "default" : "destructive"}>
+                            {vehicle.rc_status}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground italic">Not Available</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Technical Specifications */}
+                <div className="bg-background border border-border rounded-lg p-6">
+                  <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
+                    <Settings className="h-5 w-5 text-muted-foreground" />
+                    Technical Specifications
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <EditableDetailItem
+                      label="Engine Number"
+                      value={getCurrentValue("engine_number")}
+                      fieldName="engine_number"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      icon={<Hash className="h-3.5 w-3.5" />}
+                    />
+                    <EditableDetailItem
+                      label="Chassis Number"
+                      value={getCurrentValue("chassis_number")}
+                      fieldName="chassis_number"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      icon={<Hash className="h-3.5 w-3.5" />}
+                    />
+                    <EditableDetailItem
+                      label="Cubic Capacity (cc)"
+                      value={getCurrentValue("cubic_capacity")}
+                      fieldName="cubic_capacity"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      inputType="number"
+                      icon={<Gauge className="h-3.5 w-3.5" />}
+                    />
+                    <EditableDetailItem
+                      label="Fuel Type"
+                      value={getCurrentValue("fuel_type")}
+                      fieldName="fuel_type"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      icon={<Fuel className="h-3.5 w-3.5" />}
+                    />
+                    <EditableDetailItem
+                      label="Seating Capacity"
+                      value={getCurrentValue("seating_capacity")}
+                      fieldName="seating_capacity"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      inputType="number"
+                      icon={<Users className="h-3.5 w-3.5" />}
+                    />
+                    <EditableDetailItem
+                      label="Emission Norms"
+                      value={getCurrentValue("emission_norms")}
+                      fieldName="emission_norms"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      icon={<FileCheck className="h-3.5 w-3.5" />}
+                    />
+                    <EditableDetailItem
+                      label="Wheelbase"
+                      value={getCurrentValue("wheelbase")}
+                      fieldName="wheelbase"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      icon={<Weight className="h-3.5 w-3.5" />}
+                    />
+                    <EditableDetailItem
+                      label="Gross Vehicle Weight"
+                      value={getCurrentValue("gross_vehicle_weight")}
+                      fieldName="gross_vehicle_weight"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      icon={<Weight className="h-3.5 w-3.5" />}
+                    />
+                    <EditableDetailItem
+                      label="Unladen Weight"
+                      value={getCurrentValue("unladen_weight")}
+                      fieldName="unladen_weight"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      icon={<Weight className="h-3.5 w-3.5" />}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column */}
+              <div className="space-y-6">
+                {/* Ownership & Finance */}
+                <div className="bg-background border border-border rounded-lg p-6">
+                  <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
+                    <User className="h-5 w-5 text-muted-foreground" />
+                    Ownership & Finance
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <EditableDetailItem
+                      label="Owner Name"
+                      value={getCurrentValue("owner_name")}
+                      fieldName="owner_name"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      icon={<User className="h-3.5 w-3.5" />}
+                    />
+                    <EditableDetailItem
+                      label="Owner Count"
+                      value={getCurrentValue("owner_count")}
+                      fieldName="owner_count"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      inputType="number"
+                      icon={<Users className="h-3.5 w-3.5" />}
+                    />
+                    <div className="space-y-1">
+                      <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                        <Banknote className="h-3.5 w-3.5" />
+                        Finance Status
+                      </span>
+                      <div>
+                        <Badge variant={vehicle.is_financed ? "destructive" : "default"}>
+                          {vehicle.is_financed ? "Financed" : "Not Financed"}
+                        </Badge>
+                      </div>
+                    </div>
+                    <EditableDetailItem
+                      label="Financer"
+                      value={getCurrentValue("financer")}
+                      fieldName="financer"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      icon={<Banknote className="h-3.5 w-3.5" />}
+                    />
+                    <EditableDetailItem
+                      label="NOC Details"
+                      value={getCurrentValue("noc_details")}
+                      fieldName="noc_details"
+                      isEditing={isEditing}
+                      onChange={handleFieldChange}
+                      icon={<FileCheck className="h-3.5 w-3.5" />}
+                    />
+                  </div>
+                </div>
+
+                {/* Document Expiry Status */}
+                <div className="bg-background border border-border rounded-lg p-6">
+                  <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
+                    <Calendar className="h-5 w-5 text-muted-foreground" />
+                    Document Expiry Status
+                  </h3>
+                  {isEditing ? (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <EditableDetailItem
+                        label="Insurance Expiry"
+                        value={getCurrentValue("insurance_expiry")}
+                        fieldName="insurance_expiry"
+                        isEditing={isEditing}
+                        onChange={handleFieldChange}
+                        inputType="date"
+                      />
+                      <EditableDetailItem
+                        label="Insurance Company"
+                        value={getCurrentValue("insurance_company")}
+                        fieldName="insurance_company"
+                        isEditing={isEditing}
+                        onChange={handleFieldChange}
+                      />
+                      <EditableDetailItem
+                        label="PUCC Valid Until"
+                        value={getCurrentValue("pucc_valid_upto")}
+                        fieldName="pucc_valid_upto"
+                        isEditing={isEditing}
+                        onChange={handleFieldChange}
+                        inputType="date"
+                      />
+                      <EditableDetailItem
+                        label="Fitness Valid Until"
+                        value={getCurrentValue("fitness_valid_upto")}
+                        fieldName="fitness_valid_upto"
+                        isEditing={isEditing}
+                        onChange={handleFieldChange}
+                        inputType="date"
+                      />
+                      <EditableDetailItem
+                        label="Road Tax Valid Until"
+                        value={getCurrentValue("road_tax_valid_upto")}
+                        fieldName="road_tax_valid_upto"
+                        isEditing={isEditing}
+                        onChange={handleFieldChange}
+                        inputType="date"
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {expiryItems.map((item) => {
+                        const status = getExpiryStatus(item.date);
+                        return (
+                          <div key={item.label} className="flex items-center justify-between p-3 rounded-lg border border-border">
+                            <div>
+                              <p className="font-medium text-sm">{item.label}</p>
+                              {item.date ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {format(new Date(item.date), "dd MMM yyyy")}
+                                  {item.company && ` • ${item.company}`}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">Not available</p>
+                              )}
+                            </div>
+                            {status && (
+                              <Badge variant={status.variant} className="flex items-center gap-1">
+                                <status.icon className="h-3 w-3" />
+                                {status.label}
+                              </Badge>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Documents Tab */}
+          <TabsContent value="documents" className="mt-0">
+            <div className="space-y-6">
+              {/* Verification Progress */}
+              <div className="bg-background border border-border rounded-lg p-6">
+                <VerificationProgress 
+                  progress={calculateVerificationProgress(vehicle, documents)} 
+                  variant="inline"
+                />
+              </div>
+
+              {/* Photo Verification */}
+              <VehicleVerificationSection
+                vehicleId={vehicle.id}
+                registrationNumber={vehicle.registration_number}
+                isVerified={vehicle.is_verified}
+                verifiedAt={vehicle.verified_at}
+                verificationPhotoPath={vehicle.verification_photo_path}
+                onVerificationComplete={fetchVehicle}
+                variant="inline"
+              />
+
+              {/* Document Repository */}
+              <div className="bg-background border border-border rounded-lg p-6">
+                <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
+                  <Shield className="h-5 w-5 text-muted-foreground" />
+                  Document Repository
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Upload documents to store them and optionally extract data using AI
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="flex-1">
+                    <Label htmlFor="docType" className="text-sm">Document Type</Label>
+                    <Select value={selectedDocType} onValueChange={setSelectedDocType}>
+                      <SelectTrigger className="mt-1.5">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {documentTypes.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-end">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileSelect}
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      className="hidden"
+                    />
+                    <Button 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading || isAnalyzing}
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <Sparkles className="h-4 w-4 mr-2 animate-pulse" />
+                          Analyzing...
+                        </>
+                      ) : uploading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload Document
+                        </>
+                      )}
                     </Button>
                   </div>
                 </div>
-              ))}
+                {isAnalyzing && (
+                  <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+                    <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+                    <span>AI is analyzing your document to extract vehicle data...</span>
+                  </div>
+                )}
+
+                {documents.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground border border-dashed border-border rounded-lg">
+                    <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p>No documents uploaded yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {documents.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-5 w-5 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium text-sm">{doc.document_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {documentTypes.find((t) => t.value === doc.document_type)?.label} • 
+                              {format(new Date(doc.uploaded_at), " dd MMM yyyy")}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          {doc.file_path.match(/\.(jpg|jpeg|png|webp)$/i) && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleReanalyzeDocument(doc)}
+                              disabled={isAnalyzing}
+                              title="Scan with AI"
+                            >
+                              <Sparkles className="h-4 w-4 text-primary" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm" onClick={() => handleDownload(doc)} title="Download">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteDocument(doc)} title="Delete">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </SectionCard>
+          </TabsContent>
 
-        {/* Service History */}
-        <ServiceHistory vehicleId={vehicle.id} registrationNumber={vehicle.registration_number} />
+          {/* Service Tab */}
+          <TabsContent value="service" className="mt-0">
+            <ServiceHistory 
+              vehicleId={vehicle.id} 
+              registrationNumber={vehicle.registration_number} 
+              variant="inline"
+            />
+          </TabsContent>
 
-        {/* Vehicle History Log */}
-        <VehicleHistory vehicleId={vehicle.id} />
+          {/* Activity Tab */}
+          <TabsContent value="activity" className="mt-0">
+            <VehicleHistory vehicleId={vehicle.id} variant="inline" />
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* AI Analysis Modal */}

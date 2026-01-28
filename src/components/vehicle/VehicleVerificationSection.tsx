@@ -25,6 +25,7 @@ interface VehicleVerificationSectionProps {
   verifiedAt: string | null;
   verificationPhotoPath: string | null;
   onVerificationComplete: () => void;
+  variant?: "card" | "inline";
 }
 
 const VehicleVerificationSection = ({
@@ -34,6 +35,7 @@ const VehicleVerificationSection = ({
   verifiedAt,
   verificationPhotoPath,
   onVerificationComplete,
+  variant = "card",
 }: VehicleVerificationSectionProps) => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [showConsent, setShowConsent] = useState(false);
@@ -250,88 +252,83 @@ const VehicleVerificationSection = ({
   const status = getVerificationStatus();
   const StatusIcon = status.icon;
 
-  return (
+  const content = (
     <>
-      <Card className="mb-6">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${status.bgColor}`}>
-                <StatusIcon className={`h-5 w-5 ${status.color}`} />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Vehicle Verification</CardTitle>
-                <CardDescription>
-                  Upload a photo of your vehicle with the number plate visible
-                </CardDescription>
-              </div>
-            </div>
-            <Badge variant={status.variant} className="flex items-center gap-1">
-              {isVerified === true && <CheckCircle2 className="h-3 w-3" />}
-              {isVerified === false && <XCircle className="h-3 w-3" />}
-              {status.label}
-            </Badge>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg ${status.bgColor}`}>
+            <StatusIcon className={`h-5 w-5 ${status.color}`} />
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {verifiedAt && (
-              <p className="text-sm text-muted-foreground">
-                {isVerified ? "Verified" : "Last verification attempt"} on {format(new Date(verifiedAt), "dd MMM yyyy 'at' hh:mm a")}
-              </p>
-            )}
-
-            <div className="flex flex-col sm:flex-row gap-4 items-start">
-              <div className="flex-1">
-                <p className="text-sm text-muted-foreground mb-2">
-                  Take a clear photo of your vehicle showing the registration number plate. 
-                  Our AI will verify it matches <strong className="text-foreground">{registrationNumber}</strong>.
-                </p>
-                <ul className="text-xs text-muted-foreground space-y-1">
-                  <li>• Ensure the number plate is clearly visible and readable</li>
-                  <li>• Good lighting improves accuracy</li>
-                  <li>• Photo should be taken from the front or rear of the vehicle</li>
-                </ul>
-              </div>
-              
-              <div>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileSelect}
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  capture="environment"
-                />
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isVerifying}
-                  variant={isVerified ? "outline" : "default"}
-                >
-                  {isVerifying ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Verifying...
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="h-4 w-4 mr-2" />
-                      {isVerified ? "Re-verify" : "Upload Photo"}
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            {isVerifying && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted p-3 rounded-lg">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <span>AI is analyzing your photo to verify the number plate...</span>
-              </div>
-            )}
+          <div>
+            <h3 className="text-lg font-medium">Vehicle Verification</h3>
+            <p className="text-sm text-muted-foreground">
+              Upload a photo of your vehicle with the number plate visible
+            </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        <Badge variant={status.variant} className="flex items-center gap-1">
+          {isVerified === true && <CheckCircle2 className="h-3 w-3" />}
+          {isVerified === false && <XCircle className="h-3 w-3" />}
+          {status.label}
+        </Badge>
+      </div>
+
+      <div className="space-y-4">
+        {verifiedAt && (
+          <p className="text-sm text-muted-foreground">
+            {isVerified ? "Verified" : "Last verification attempt"} on {format(new Date(verifiedAt), "dd MMM yyyy 'at' hh:mm a")}
+          </p>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-4 items-start">
+          <div className="flex-1">
+            <p className="text-sm text-muted-foreground mb-2">
+              Take a clear photo of your vehicle showing the registration number plate. 
+              Our AI will verify it matches <strong className="text-foreground">{registrationNumber}</strong>.
+            </p>
+            <ul className="text-xs text-muted-foreground space-y-1">
+              <li>• Ensure the number plate is clearly visible and readable</li>
+              <li>• Good lighting improves accuracy</li>
+              <li>• Photo should be taken from the front or rear of the vehicle</li>
+            </ul>
+          </div>
+          
+          <div>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              capture="environment"
+            />
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isVerifying}
+              variant={isVerified ? "outline" : "default"}
+            >
+              {isVerifying ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                <>
+                  <Camera className="h-4 w-4 mr-2" />
+                  {isVerified ? "Re-verify" : "Upload Photo"}
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {isVerifying && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted p-3 rounded-lg border border-border">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span>AI is analyzing your photo to verify the number plate...</span>
+          </div>
+        )}
+      </div>
 
       <UploadConsentDialog
         open={showConsent}
@@ -346,6 +343,22 @@ const VehicleVerificationSection = ({
         description="You are about to upload a photo for vehicle verification."
       />
     </>
+  );
+
+  if (variant === "inline") {
+    return (
+      <div className="bg-background border border-border rounded-lg p-6">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Card className="mb-6">
+      <CardContent className="pt-6">
+        {content}
+      </CardContent>
+    </Card>
   );
 };
 
