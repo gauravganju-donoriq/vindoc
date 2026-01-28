@@ -173,12 +173,16 @@ serve(async (req) => {
       if (postAction === "create" || postAction === "update") {
         const config = body.config as Partial<VoiceAgentConfig>;
 
+        // Webhook URL for receiving call updates
+        const webhookUrl = `${supabaseUrl}/functions/v1/bolna-webhook`;
+
         // Build Bolna agent payload matching API docs structure
         const bolnaPayload = {
           agent_config: {
             agent_name: config.agent_name || "CertChaperone Reminder",
             agent_welcome_message: config.welcome_message || "Hello!",
             agent_type: "other",
+            webhook_url: webhookUrl,
             tasks: [
               {
                 task_type: "conversation",
