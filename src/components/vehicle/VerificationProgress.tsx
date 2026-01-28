@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { 
   CheckCircle2, 
   Circle, 
@@ -6,17 +7,20 @@ import {
   Settings, 
   User, 
   FileText,
-  AlertCircle
+  AlertCircle,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { 
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { VerificationProgress as VerificationProgressType, VerificationStep } from "@/lib/verificationChecks";
 
 interface VerificationProgressProps {
@@ -43,93 +47,128 @@ const getCategoryIcon = (category: VerificationStep["category"]) => {
 
 const VerificationProgress = ({ progress, variant = "card" }: VerificationProgressProps) => {
   const { steps, completedCount, percentage, isFullyVerified } = progress;
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Count incomplete required steps
+  const incompleteRequired = steps.filter(s => s.required && !s.completed).length;
 
   const content = (
-    <>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-medium flex items-center gap-2">
-            {isFullyVerified ? (
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-            ) : (
-              <AlertCircle className="h-5 w-5 text-amber-500" />
-            )}
-            Verification Progress
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {isFullyVerified 
-              ? "All required verification steps complete!" 
-              : `Complete the steps below to fully verify your vehicle`}
-          </p>
-        </div>
-        <Badge 
-          variant={isFullyVerified ? "default" : "secondary"}
-          className={`text-sm ${isFullyVerified ? "bg-green-600" : ""}`}
-        >
-          {completedCount}/{steps.length} Complete
-        </Badge>
-      </div>
-
-      {/* Progress bar */}
-      <div className="space-y-2 mb-4">
-        <Progress value={percentage} className="h-2" />
-        <p className="text-xs text-muted-foreground text-right">{percentage}% verified</p>
-      </div>
-
-      {/* Verification steps */}
-      <div className="grid gap-2">
-        <TooltipProvider>
-          {steps.map((step) => {
-            const Icon = getCategoryIcon(step.category);
-            return (
-              <Tooltip key={step.id}>
-                <TooltipTrigger asChild>
-                  <div 
-                    className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
-                      step.completed 
-                        ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" 
-                        : "bg-muted/50 border-border"
-                    }`}
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger asChild>
+        <div className="cursor-pointer">
+          {/* Compact Header */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className={`p-2 rounded-lg ${isFullyVerified ? "bg-green-100 dark:bg-green-900/30" : "bg-amber-100 dark:bg-amber-900/30"}`}>
+                {isFullyVerified ? (
+                  <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-medium">
+                    {isFullyVerified ? "Fully Verified" : "Verification Progress"}
+                  </h3>
+                  <Badge 
+                    variant={isFullyVerified ? "default" : "secondary"}
+                    className={isFullyVerified ? "bg-green-600" : ""}
                   >
-                    <div className={`p-1.5 rounded-full ${
-                      step.completed 
-                        ? "bg-green-100 dark:bg-green-800" 
-                        : "bg-muted"
-                    }`}>
-                      {step.completed ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      ) : (
-                        <Icon className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-medium ${
-                          step.completed ? "text-green-700 dark:text-green-300" : "text-foreground"
+                    {percentage}%
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {isFullyVerified 
+                    ? "All verification steps complete" 
+                    : `${incompleteRequired} required step${incompleteRequired !== 1 ? 's' : ''} remaining`}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {/* Mini progress bar on desktop */}
+              <div className="hidden sm:block w-24">
+                <Progress value={percentage} className="h-2" />
+              </div>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                {isOpen ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Mobile progress bar */}
+          <div className="sm:hidden mt-3">
+            <Progress value={percentage} className="h-2" />
+          </div>
+        </div>
+      </CollapsibleTrigger>
+
+      <CollapsibleContent>
+        <div className="mt-4 pt-4 border-t border-border">
+          {/* Verification steps */}
+          <div className="grid gap-2">
+            <TooltipProvider>
+              {steps.map((step) => {
+                const Icon = getCategoryIcon(step.category);
+                return (
+                  <Tooltip key={step.id}>
+                    <TooltipTrigger asChild>
+                      <div 
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                          step.completed 
+                            ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" 
+                            : "bg-muted/50 border-border"
+                        }`}
+                      >
+                        <div className={`p-1.5 rounded-full ${
+                          step.completed 
+                            ? "bg-green-100 dark:bg-green-800" 
+                            : "bg-muted"
                         }`}>
-                          {step.label}
-                        </span>
-                        {!step.required && (
-                          <Badge variant="outline" className="text-xs px-1.5 py-0">
-                            Recommended
-                          </Badge>
+                          {step.completed ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <Icon className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-medium ${
+                              step.completed ? "text-green-700 dark:text-green-300" : "text-foreground"
+                            }`}>
+                              {step.label}
+                            </span>
+                            {!step.required && (
+                              <Badge variant="outline" className="text-xs px-1.5 py-0">
+                                Recommended
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {step.description}
+                          </p>
+                        </div>
+                        {step.completed && (
+                          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {step.description}
-                      </p>
-                    </div>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="left" className="max-w-[250px]">
-                  <p className="text-sm">{step.description}</p>
-                </TooltipContent>
-              </Tooltip>
-            );
-          })}
-        </TooltipProvider>
-      </div>
-    </>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className="max-w-[250px]">
+                      <p className="text-sm">{step.description}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </TooltipProvider>
+          </div>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 
   if (variant === "inline") {
@@ -137,11 +176,9 @@ const VerificationProgress = ({ progress, variant = "card" }: VerificationProgre
   }
 
   return (
-    <Card className="mb-6">
-      <CardContent className="pt-6">
-        {content}
-      </CardContent>
-    </Card>
+    <div className="bg-background border border-border rounded-lg p-6 mb-6">
+      {content}
+    </div>
   );
 };
 
