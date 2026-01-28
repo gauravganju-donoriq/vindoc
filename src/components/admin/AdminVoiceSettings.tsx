@@ -87,14 +87,6 @@ export const AdminVoiceSettings = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const response = await supabase.functions.invoke("manage-voice-agent", {
-        body: {},
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-
-      // Handle the response - for GET requests with query params, we need to use fetch directly
       const configResponse = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-voice-agent?action=config`,
         {
