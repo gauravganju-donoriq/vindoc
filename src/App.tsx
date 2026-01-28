@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import AddVehicle from "./pages/AddVehicle";
 import VehicleDetails from "./pages/VehicleDetails";
 import Admin from "./pages/Admin";
+import Settings from "./pages/Settings";
 import StyleGuide from "./pages/StyleGuide";
 import NotFound from "./pages/NotFound";
 
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/add-vehicle" element={<AddVehicle />} />
           <Route path="/vehicle/:id" element={<VehicleDetails />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/style-guide" element={<StyleGuide />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
