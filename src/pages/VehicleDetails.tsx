@@ -756,6 +756,12 @@ const VehicleDetails = () => {
       </header>
 
       <main className="container mx-auto px-4 py-6 max-w-6xl">
+        {/* Verification Progress - Global, always visible */}
+        <VerificationProgress 
+          progress={calculateVerificationProgress(vehicle, documents)} 
+          variant="card"
+        />
+
         {/* Vehicle Hero Section */}
         <div className="bg-background border border-border rounded-lg p-6 mb-6">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
@@ -913,6 +919,10 @@ const VehicleDetails = () => {
             <TabsTrigger value="overview" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <LayoutGrid className="h-4 w-4" />
               <span className="hidden sm:inline">Overview</span>
+            </TabsTrigger>
+            <TabsTrigger value="verification" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <Shield className="h-4 w-4" />
+              <span className="hidden sm:inline">Verification</span>
             </TabsTrigger>
             <TabsTrigger value="documents" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <FileStack className="h-4 w-4" />
@@ -1234,17 +1244,9 @@ const VehicleDetails = () => {
             </div>
           </TabsContent>
 
-          {/* Documents Tab */}
-          <TabsContent value="documents" className="mt-0">
+          {/* Verification Tab */}
+          <TabsContent value="verification" className="mt-0">
             <div className="space-y-6">
-              {/* Verification Progress */}
-              <div className="bg-background border border-border rounded-lg p-6">
-                <VerificationProgress 
-                  progress={calculateVerificationProgress(vehicle, documents)} 
-                  variant="inline"
-                />
-              </div>
-
               {/* Photo Verification */}
               <VehicleVerificationSection
                 vehicleId={vehicle.id}
@@ -1255,7 +1257,12 @@ const VehicleDetails = () => {
                 onVerificationComplete={fetchVehicle}
                 variant="inline"
               />
+            </div>
+          </TabsContent>
 
+          {/* Documents Tab */}
+          <TabsContent value="documents" className="mt-0">
+            <div className="space-y-6">
               {/* Document Repository */}
               <div className="bg-background border border-border rounded-lg p-6">
                 <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
