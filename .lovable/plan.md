@@ -1,252 +1,186 @@
 
-# Request Transfer Feature - When Vehicle Already Registered
+
+# Design System & Style Guide Implementation Plan
 
 ## Overview
-When a user tries to add a vehicle that's already registered by another user in the system, instead of just showing an error, we'll offer them the option to "Request Transfer" from the current owner. This creates a new type of transfer request flow where the potential new owner initiates contact.
 
-## Current Behavior
-When error code `23505` (unique constraint violation) occurs in `AddVehicle.tsx`, the user sees:
-> "This vehicle is already registered in the system by another user."
-
-No further action is possible.
-
-## New Behavior
-1. Detect the duplicate vehicle error
-2. Show a friendly UI explaining the situation
-3. Offer a "Request Transfer" button
-4. When clicked, send an email to the current owner asking them to initiate a transfer
-5. Log this request for tracking
+Creating a comprehensive, single-page style guide that establishes visual consistency across the Vehicle Document Manager application. The design will focus on eye comfort, readability, and a clean minimal aesthetic.
 
 ---
 
-## Database Changes
+## Design Philosophy
 
-### New Table: `ownership_claims`
-Tracks when someone claims they own a vehicle registered by another user.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `registration_number` | TEXT | The disputed vehicle registration |
-| `vehicle_id` | UUID | Reference to the existing vehicle |
-| `claimant_id` | UUID | User making the claim |
-| `claimant_email` | TEXT | Email of claimant for notifications |
-| `claimant_phone` | TEXT | Optional phone number |
-| `current_owner_id` | UUID | Current registered owner |
-| `status` | TEXT | 'pending', 'resolved', 'rejected', 'expired' |
-| `message` | TEXT | Optional message from claimant |
-| `created_at` | TIMESTAMP | When claim was made |
-| `expires_at` | TIMESTAMP | Auto-expire after 14 days |
-
-### RLS Policies
-- Claimants can create claims for vehicles they don't own
-- Claimants can view their own claims
-- Current owners can view claims on their vehicles
-- Super admins can view all claims
+### Core Principles
+1. **One Primary Color** - A calming, professional primary color (suggestion: a soft teal/blue-green)
+2. **Soft Neutrals** - Light grays for backgrounds, no harsh whites
+3. **Comfortable Blacks** - Using dark charcoal (#1a1a2e or similar) instead of jet black (#000)
+4. **Pastel Accents** - Muted, pastel tones for status colors (success, warning, error)
+5. **Smooth Typography** - Google Font optimized for screen readability
 
 ---
 
-## Backend Changes
+## Color Palette
 
-### New Edge Function: `send-ownership-claim-notification`
-Sends an email to the current vehicle owner when someone claims ownership.
-
-**Email Content:**
-- Explains that someone is trying to register their vehicle
-- Shows claimant's contact info (email, phone if provided)
-- Asks them to either:
-  - Initiate a transfer if they sold the vehicle
-  - Ignore if they still own it
-- Links to their dashboard
-
----
-
-## Frontend Changes
-
-### 1. Update `AddVehicle.tsx`
-
-**New State Variables:**
-```typescript
-const [duplicateVehicleInfo, setDuplicateVehicleInfo] = useState<{
-  vehicleId: string;
-  currentOwnerId: string;
-} | null>(null);
-const [showClaimDialog, setShowClaimDialog] = useState(false);
-```
-
-**Modified Error Handling:**
-When `23505` error occurs:
-1. Query the vehicle to get its `id` and `user_id` (via edge function since RLS blocks direct access)
-2. Set `duplicateVehicleInfo` state
-3. Show the "Vehicle Already Registered" UI
-
-**New UI Section:**
-When duplicate detected, show:
-```text
-This vehicle is registered to another user.
-If you recently purchased this vehicle, you can request
-the current owner to transfer it to you.
-
-[Request Transfer] [Cancel]
-```
-
-### 2. New Component: `RequestTransferDialog.tsx`
-A dialog that collects:
-- Claimant's phone number (optional, for contact)
-- Optional message explaining the situation
-
-### 3. Update Edge Function: `admin-data`
-Add action to fetch vehicle owner info for ownership claims:
-- `get_vehicle_owner`: Returns vehicle_id and owner details (not email, just confirmation it exists)
+| Role | Light Mode | Purpose |
+|------|------------|---------|
+| **Primary** | `hsl(168, 50%, 40%)` | Main actions, links, focus states |
+| **Background** | `hsl(210, 20%, 98%)` | Page background (warm off-white) |
+| **Card** | `hsl(0, 0%, 100%)` | Card surfaces |
+| **Foreground** | `hsl(220, 20%, 18%)` | Main text (soft charcoal) |
+| **Muted** | `hsl(210, 15%, 95%)` | Secondary backgrounds |
+| **Muted Foreground** | `hsl(215, 15%, 50%)` | Secondary text |
+| **Border** | `hsl(210, 15%, 90%)` | Subtle borders |
+| **Destructive** | `hsl(0, 60%, 60%)` | Pastel red for errors |
+| **Warning** | `hsl(38, 70%, 55%)` | Pastel amber for warnings |
+| **Success** | `hsl(145, 45%, 50%)` | Pastel green for success |
 
 ---
 
-## User Flow
+## Typography
 
-```text
-+------------------------+
-|  User enters reg number |
-+------------------------+
-           |
-           v
-+------------------------+
-|  Clicks "Save Vehicle" |
-+------------------------+
-           |
-           v
-+---------------------------+
-| Database returns 23505    |
-| (duplicate key violation) |
-+---------------------------+
-           |
-           v
-+-------------------------------+
-| Show "Already Registered" UI  |
-| with "Request Transfer" option|
-+-------------------------------+
-           |
-           v (user clicks Request Transfer)
-+-------------------------------+
-| Open RequestTransferDialog    |
-| - Enter phone (optional)      |
-| - Add message (optional)      |
-+-------------------------------+
-           |
-           v
-+-------------------------------+
-| Create ownership_claim record |
-| Send email to current owner   |
-| Show success message          |
-+-------------------------------+
-           |
-           v
-+-------------------------------+
-| Current owner sees email      |
-| Goes to dashboard             |
-| Initiates transfer            |
-+-------------------------------+
-```
+### Font Selection: Inter
+- **Why Inter?** Designed specifically for screens, excellent x-height, open apertures, and optimized for UI readability
+- **Fallback**: system-ui, -apple-system, sans-serif
+
+### Type Scale
+| Element | Size | Weight | Line Height |
+|---------|------|--------|-------------|
+| Display | 2.5rem | 700 | 1.2 |
+| H1 | 2rem | 600 | 1.3 |
+| H2 | 1.5rem | 600 | 1.4 |
+| H3 | 1.25rem | 500 | 1.4 |
+| Body | 1rem | 400 | 1.6 |
+| Small | 0.875rem | 400 | 1.5 |
+| Caption | 0.75rem | 400 | 1.4 |
 
 ---
 
-## Implementation Steps
+## Spacing System
 
-### Step 1: Database Migration
-- Create `ownership_claims` table with appropriate columns
-- Add RLS policies for claimants, owners, and super admins
-- Add indexes for performance
+Using a consistent 4px base:
+- `xs`: 4px
+- `sm`: 8px
+- `md`: 16px
+- `lg`: 24px
+- `xl`: 32px
+- `2xl`: 48px
+- `3xl`: 64px
 
-### Step 2: Edge Function for Claim Notification
-- Create `send-ownership-claim-notification` edge function
-- Send personalized email to current owner with claim details
-- Use Resend API (already configured)
+---
 
-### Step 3: Update Admin-Data Edge Function
-- Add `get_vehicle_for_claim` action that returns vehicle ID and owner ID for a registration number
-- This bypasses RLS to check if vehicle exists
+## Style Guide Page Structure
 
-### Step 4: Create RequestTransferDialog Component
-- Dialog with phone input and message textarea
-- Submits to create ownership claim
-- Triggers notification email
+The `/style-guide` page will include the following sections:
 
-### Step 5: Update AddVehicle.tsx
-- Detect duplicate error and fetch vehicle info
-- Show the "Request Transfer" option UI
-- Integrate RequestTransferDialog
+### 1. Brand Section
+- Logo display with usage guidelines
+- App name and tagline
 
-### Step 6: Dashboard Notification for Current Owners (Optional Enhancement)
-- Show pending claims on dashboard similar to incoming transfers
-- Allow owners to quickly initiate transfer from there
+### 2. Color Palette Display
+- Primary color with all shades
+- Neutral grays spectrum
+- Semantic colors (success, warning, error)
+- Interactive swatches showing hex/HSL values
+
+### 3. Typography Showcase
+- All heading levels
+- Body text samples
+- Font weight demonstrations
+- Line height examples
+
+### 4. Component Library
+- **Buttons**: Primary, Secondary, Outline, Ghost, Destructive
+- **Cards**: Default, with header, interactive
+- **Badges**: All variants with status colors
+- **Form Elements**: Inputs, selects, checkboxes, radio buttons
+- **Dialogs**: Alert dialogs, confirmation modals
+- **Tables**: Sample data tables
+- **Alerts**: Info, success, warning, error states
+
+### 5. Iconography
+- Lucide icon examples with sizing guidelines
+
+### 6. Shadows & Elevation
+- Shadow levels for depth
+
+---
+
+## Implementation Tasks
+
+### Phase 1: Design Tokens
+1. Update `index.html` to include Inter font from Google Fonts
+2. Update `src/index.css` with new color palette:
+   - Softer background colors
+   - Comfortable charcoal for text
+   - New primary color
+   - Pastel semantic colors
+3. Update `tailwind.config.ts` with extended font family
+
+### Phase 2: Style Guide Page
+4. Create `src/pages/StyleGuide.tsx`:
+   - Brand section with logo placeholder
+   - Color palette display component
+   - Typography showcase
+   - Component demonstrations
+   - Spacing examples
+5. Add route to `App.tsx` for `/style-guide`
+
+### Phase 3: Component Refinements
+6. Review and update key components to use the new design tokens:
+   - Update button hover/focus states
+   - Ensure consistent border-radius
+   - Apply new shadow values
 
 ---
 
 ## Technical Details
 
-### Edge Function: get_vehicle_for_claim
-```typescript
-case "get_vehicle_for_claim": {
-  const { data, error } = await adminClient
-    .from("vehicles")
-    .select("id, user_id, registration_number, maker_model")
-    .eq("registration_number", registrationNumber)
-    .maybeSingle();
+### New CSS Variables (index.css)
+```css
+:root {
+  /* Comfortable off-white background */
+  --background: 210 20% 98%;
   
-  if (error || !data) {
-    return new Response(JSON.stringify({ found: false }), ...);
-  }
+  /* Soft charcoal text - NOT jet black */
+  --foreground: 220 20% 18%;
   
-  return new Response(JSON.stringify({ 
-    found: true, 
-    vehicleId: data.id,
-    ownerId: data.user_id,
-    model: data.maker_model
-  }), ...);
+  /* Primary: Calming teal */
+  --primary: 168 50% 40%;
+  --primary-foreground: 0 0% 100%;
+  
+  /* Muted grays */
+  --muted: 210 15% 95%;
+  --muted-foreground: 215 15% 50%;
+  
+  /* Pastel semantic colors */
+  --destructive: 0 60% 60%;
+  --warning: 38 70% 55%;
+  --success: 145 45% 50%;
 }
 ```
 
-### Ownership Claim Insert
-```typescript
-await supabase.from("ownership_claims").insert({
-  registration_number: registrationNumber,
-  vehicle_id: vehicleId,
-  claimant_id: user.id,
-  claimant_email: user.email,
-  claimant_phone: phone,
-  current_owner_id: ownerId,
-  message: message,
-  expires_at: addDays(new Date(), 14).toISOString(),
-});
+### Google Fonts Integration
+```html
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 ```
 
-### Email to Current Owner
-Subject: "Someone is trying to register your vehicle"
-
-Body highlights:
-- Vehicle registration number
-- Claimant's email and phone
-- "If you sold this vehicle, please log in and transfer ownership"
-- "If you still own this vehicle, you can ignore this message"
-- Link to dashboard
-
----
-
-## Security Considerations
-
-1. **Rate Limiting**: Prevent spam claims by limiting one claim per user per vehicle
-2. **Privacy**: Don't expose current owner's email to claimant
-3. **Expiry**: Claims auto-expire after 14 days to prevent stale requests
-4. **RLS**: Proper policies ensure users only see relevant claims
+### Files to Create/Modify
+| File | Action |
+|------|--------|
+| `index.html` | Add Inter font, update title/meta |
+| `src/index.css` | New color palette, font-family |
+| `tailwind.config.ts` | Add font-family, new colors |
+| `src/pages/StyleGuide.tsx` | **New** - Complete style guide page |
+| `src/App.tsx` | Add `/style-guide` route |
 
 ---
 
-## Files to Create/Modify
+## Notes
 
-| File | Action | Description |
-|------|--------|-------------|
-| `supabase/migrations/[timestamp].sql` | Create | New ownership_claims table |
-| `supabase/functions/send-ownership-claim-notification/index.ts` | Create | Email notification function |
-| `supabase/functions/admin-data/index.ts` | Modify | Add get_vehicle_for_claim action |
-| `supabase/config.toml` | Modify | Register new edge function |
-| `src/components/vehicle/RequestTransferDialog.tsx` | Create | Dialog component |
-| `src/pages/AddVehicle.tsx` | Modify | Handle duplicate + show request option |
+- The style guide will be a living document that showcases all design decisions
+- All existing components will automatically inherit the new colors since they use CSS variables
+- The guide will be accessible at `/style-guide` for reference during development
+- Dark mode support will be maintained with appropriate pastel adjustments
+
