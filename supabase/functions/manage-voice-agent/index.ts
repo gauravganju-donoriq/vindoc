@@ -173,38 +173,67 @@ serve(async (req) => {
       if (postAction === "create" || postAction === "update") {
         const config = body.config as Partial<VoiceAgentConfig>;
 
-        // Build Bolna agent payload
+        // Build Bolna agent payload with correct structure
         const bolnaPayload = {
           agent_config: {
             agent_name: config.agent_name || "CertChaperone Reminder",
             agent_welcome_message: config.welcome_message,
+            agent_type: "other",
             tasks: [
               {
                 task_type: "conversation",
                 tools_config: {
-                  synthesizer: {
-                    provider: config.voice_provider || "sarvam",
-                    provider_config: {
-                      voice: config.voice_id || "meera",
-                      model: config.voice_provider === "sarvam" ? "bulbul:v1" : undefined,
+                  llm_agent: {
+                    agent_type: "simple_llm_agent",
+                    agent_flow_type: "streaming",
+                    llm_config: {
+                      provider: "openai",
+                      model: "gpt-4.1-mini",
+                      temperature: 0.3,
+                      max_tokens: 150,
                     },
+                  },
+                  synthesizer: {
+                    provider: config.voice_provider || "elevenlabs",
+                    provider_config: config.voice_provider === "sarvam" 
+                      ? {
+                          voice: config.voice_id || "meera",
+                          model: "bulbul:v1",
+                        }
+                      : {
+                          voice: config.voice_id || "Nila",
+                          voice_id: "V9LCAAi4tTlqe9JadbCo",
+                          model: "eleven_turbo_v2_5",
+                        },
+                    stream: true,
+                    buffer_size: 250,
                   },
                   transcriber: {
                     provider: "deepgram",
                     model: "nova-3",
                     language: config.language || "hi",
+                    stream: true,
+                    sampling_rate: 16000,
+                    encoding: "linear16",
                   },
-                  llm_agent: {
-                    llm_config: {
-                      provider: "openai",
-                      model: "gpt-4.1-mini",
-                      temperature: 0.3,
-                    },
+                  input: {
+                    provider: "default",
+                    format: "wav",
                   },
+                  output: {
+                    provider: "default",
+                    format: "wav",
+                  },
+                },
+                toolchain: {
+                  execution: "parallel",
+                  pipelines: [["transcriber", "llm", "synthesizer"]],
                 },
                 task_config: {
                   call_terminate: config.call_terminate_seconds || 60,
                   hangup_after_silence: config.hangup_after_silence || 10,
+                  incremental_delay: 400,
+                  number_of_words_for_interruption: 2,
                 },
               },
             ],
