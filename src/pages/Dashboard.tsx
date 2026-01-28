@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import { Car, Plus, LogOut, AlertTriangle, CheckCircle, Clock, Trash2, ShieldCheck, ShieldX, Shield } from "lucide-react";
+import { Car, Plus, LogOut, AlertTriangle, CheckCircle, Clock, Trash2, ShieldCheck, ShieldX, Shield, Settings } from "lucide-react";
 import { useIsAdminUser } from "@/hooks/useAdminCheck";
 import { format, differenceInDays, isPast } from "date-fns";
 import {
@@ -171,6 +171,11 @@ const Dashboard = () => {
             <h1 className="text-lg font-semibold">Valt</h1>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/settings">
+                <Settings className="h-4 w-4" />
+              </Link>
+            </Button>
             {isAdmin && (
               <Button variant="outline" size="sm" asChild>
                 <Link to="/admin">

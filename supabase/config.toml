@@ -20,3 +20,9 @@ verify_jwt = false
 
 [functions.send-ownership-claim-notification]
 verify_jwt = false
+
+[functions.manage-voice-agent]
+verify_jwt = false
+
+[functions.make-voice-call]
+verify_jwt = false

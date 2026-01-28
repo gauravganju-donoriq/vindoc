@@ -11,6 +11,7 @@ interface Vehicle {
   id: string;
   user_id: string;
   registration_number: string;
+  owner_name: string | null;
   maker_model: string | null;
   fuel_type: string | null;
   registration_date: string | null;
@@ -175,7 +176,7 @@ serve(async (req) => {
     // Fetch all vehicles with their expiry dates
     const { data: vehicles, error: vehiclesError } = await supabase
       .from("vehicles")
-      .select("id, user_id, registration_number, maker_model, fuel_type, registration_date, insurance_expiry, pucc_valid_upto, fitness_valid_upto, road_tax_valid_upto, vehicle_class");
+      .select("id, user_id, registration_number, owner_name, maker_model, fuel_type, registration_date, insurance_expiry, pucc_valid_upto, fitness_valid_upto, road_tax_valid_upto, vehicle_class");
 
     if (vehiclesError) {
       console.error("Error fetching vehicles:", vehiclesError);
@@ -441,6 +442,74 @@ serve(async (req) => {
       } catch (emailError) {
         console.error(`Failed to send email to ${userEmail}:`, emailError);
         continue;
+      }
+
+      // Trigger voice calls for critical alerts (7-day and expired documents)
+      for (const doc of documentsWithAI) {
+        if (doc.notificationType === "7_day" || doc.notificationType === "expired") {
+          try {
+            console.log(`Triggering voice call for ${doc.documentType} (${doc.notificationType}) - vehicle ${doc.vehicle.id}`);
+            const voiceCallResponse = await fetch(`${supabaseUrl}/functions/v1/make-voice-call`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${supabaseServiceKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                userId: userId,
+                vehicleId: doc.vehicle.id,
+                documentType: doc.documentType,
+                daysUntilExpiry: doc.daysUntilExpiry,
+                ownerName: doc.vehicle.owner_name,
+                registrationNumber: doc.vehicle.registration_number,
+              }),
+            });
+            
+            if (voiceCallResponse.ok) {
+              const result = await voiceCallResponse.json();
+              console.log(`Voice call result for ${doc.documentType}:`, result);
+            } else {
+              const errorText = await voiceCallResponse.text();
+              console.error(`Voice call failed for ${doc.documentType}:`, errorText);
+            }
+          } catch (voiceError) {
+            console.error(`Error triggering voice call for ${doc.documentType}:`, voiceError);
+          }
+        }
+      }
+
+      // Trigger voice calls for overdue services
+      for (const reminder of servicesWithAI) {
+        if (reminder.notificationType === "overdue") {
+          try {
+            console.log(`Triggering voice call for overdue service - vehicle ${reminder.vehicle.id}`);
+            const voiceCallResponse = await fetch(`${supabaseUrl}/functions/v1/make-voice-call`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${supabaseServiceKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                userId: userId,
+                vehicleId: reminder.vehicle.id,
+                documentType: `service_${reminder.serviceRecord.service_type}`,
+                daysUntilExpiry: reminder.daysUntilDue,
+                ownerName: reminder.vehicle.owner_name,
+                registrationNumber: reminder.vehicle.registration_number,
+              }),
+            });
+            
+            if (voiceCallResponse.ok) {
+              const result = await voiceCallResponse.json();
+              console.log(`Voice call result for service:`, result);
+            } else {
+              const errorText = await voiceCallResponse.text();
+              console.error(`Voice call failed for service:`, errorText);
+            }
+          } catch (voiceError) {
+            console.error(`Error triggering voice call for service:`, voiceError);
+          }
+        }
       }
 
       // Log document notifications
