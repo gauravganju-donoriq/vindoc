@@ -34,6 +34,7 @@ import VehicleProfileImage from "@/components/vehicle/VehicleProfileImage";
 import VerificationProgress from "@/components/vehicle/VerificationProgress";
 import { logVehicleEvent } from "@/lib/vehicleHistory";
 import { calculateVerificationProgress } from "@/lib/verificationChecks";
+import { toTitleCase } from "@/lib/utils";
 
 interface Vehicle {
   id: string;
@@ -785,9 +786,9 @@ const VehicleDetails = () => {
                   )}
                 </div>
                 <p className="text-muted-foreground">
-                  {vehicle.manufacturer && <span>{vehicle.manufacturer}</span>}
+                  {vehicle.manufacturer && <span>{toTitleCase(vehicle.manufacturer)}</span>}
                   {vehicle.maker_model && vehicle.manufacturer && " • "}
-                  {vehicle.maker_model && <span>{vehicle.maker_model}</span>}
+                  {vehicle.maker_model && <span>{toTitleCase(vehicle.maker_model)}</span>}
                   {!vehicle.manufacturer && !vehicle.maker_model && "Vehicle Details"}
                 </p>
                 {/* Quick Stats */}
@@ -795,7 +796,7 @@ const VehicleDetails = () => {
                   {vehicle.fuel_type && (
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <Fuel className="h-4 w-4" />
-                      <span>{vehicle.fuel_type}</span>
+                      <span>{toTitleCase(vehicle.fuel_type)}</span>
                     </div>
                   )}
                   {registrationYear && (
@@ -813,7 +814,7 @@ const VehicleDetails = () => {
                   {vehicle.color && (
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <Palette className="h-4 w-4" />
-                      <span>{vehicle.color}</span>
+                      <span>{toTitleCase(vehicle.color)}</span>
                     </div>
                   )}
                 </div>
@@ -946,6 +947,7 @@ const VehicleDetails = () => {
                       fieldName="manufacturer"
                       isEditing={isEditing}
                       onChange={handleFieldChange}
+                      normalize
                     />
                     <EditableDetailItem
                       label="Model"
@@ -953,6 +955,7 @@ const VehicleDetails = () => {
                       fieldName="maker_model"
                       isEditing={isEditing}
                       onChange={handleFieldChange}
+                      normalize
                     />
                     <EditableDetailItem
                       label="Vehicle Class"
@@ -981,6 +984,7 @@ const VehicleDetails = () => {
                       fieldName="color"
                       isEditing={isEditing}
                       onChange={handleFieldChange}
+                      normalize
                     />
                     <EditableDetailItem
                       label="Registration Date"
@@ -1106,6 +1110,7 @@ const VehicleDetails = () => {
                       isEditing={isEditing}
                       onChange={handleFieldChange}
                       icon={<User className="h-3.5 w-3.5" />}
+                      normalize
                     />
                     <EditableDetailItem
                       label="Owner Count"
@@ -1134,6 +1139,7 @@ const VehicleDetails = () => {
                       isEditing={isEditing}
                       onChange={handleFieldChange}
                       icon={<Banknote className="h-3.5 w-3.5" />}
+                      normalize
                     />
                     <EditableDetailItem
                       label="NOC Details"
@@ -1168,6 +1174,7 @@ const VehicleDetails = () => {
                         fieldName="insurance_company"
                         isEditing={isEditing}
                         onChange={handleFieldChange}
+                        normalize
                       />
                       <EditableDetailItem
                         label="PUCC Valid Until"

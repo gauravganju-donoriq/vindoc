@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn, toTitleCase } from "@/lib/utils";
 
 interface EditableDetailItemProps {
   label: string;
@@ -11,6 +11,7 @@ interface EditableDetailItemProps {
   icon?: ReactNode;
   inputType?: "text" | "number" | "date";
   placeholder?: string;
+  normalize?: boolean;
 }
 
 const EditableDetailItem = ({ 
@@ -21,13 +22,18 @@ const EditableDetailItem = ({
   onChange,
   icon,
   inputType = "text",
-  placeholder
+  placeholder,
+  normalize = false
 }: EditableDetailItemProps) => {
-  const displayValue = value !== null && value !== undefined && value !== "" 
-    ? String(value) 
-    : "Not Available";
   const isAvailable = value !== null && value !== undefined && value !== "";
   const isEmpty = !isAvailable;
+  
+  // Get display value with optional normalization
+  const getDisplayValue = () => {
+    if (!isAvailable) return "Not Available";
+    const stringValue = String(value);
+    return normalize ? (toTitleCase(stringValue) || stringValue) : stringValue;
+  };
 
   // Format date for input display
   const getInputValue = () => {
@@ -72,7 +78,7 @@ const EditableDetailItem = ({
         {label}
       </span>
       <p className={cn("font-medium", !isAvailable && "text-muted-foreground italic")}>
-        {displayValue}
+        {getDisplayValue()}
       </p>
     </div>
   );
