@@ -43,10 +43,10 @@ const StyleGuide = () => {
   ];
 
   const typographyScale = [
-    { name: "Display", size: "2.5rem", weight: "700", lineHeight: "1.2", className: "text-4xl font-bold" },
-    { name: "H1", size: "2rem", weight: "600", lineHeight: "1.3", className: "text-3xl font-semibold" },
-    { name: "H2", size: "1.5rem", weight: "600", lineHeight: "1.4", className: "text-2xl font-semibold" },
-    { name: "H3", size: "1.25rem", weight: "500", lineHeight: "1.4", className: "text-xl font-medium" },
+    { name: "Display", size: "1.875rem", weight: "700", lineHeight: "1.2", className: "text-3xl font-bold" },
+    { name: "H1", size: "1.5rem", weight: "600", lineHeight: "1.3", className: "text-2xl font-semibold" },
+    { name: "H2", size: "1.25rem", weight: "600", lineHeight: "1.4", className: "text-xl font-semibold" },
+    { name: "H3", size: "1.125rem", weight: "500", lineHeight: "1.4", className: "text-lg font-medium" },
     { name: "Body", size: "1rem", weight: "400", lineHeight: "1.6", className: "text-base" },
     { name: "Small", size: "0.875rem", weight: "400", lineHeight: "1.5", className: "text-sm" },
     { name: "Caption", size: "0.75rem", weight: "400", lineHeight: "1.4", className: "text-xs" },
@@ -74,10 +74,10 @@ const StyleGuide = () => {
         <div className="container py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-              <Car className="h-5 w-5 text-primary-foreground" />
+              <Shield className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-semibold text-lg">Vehicle Document Manager</h1>
+              <h1 className="font-semibold text-lg">Valt</h1>
               <p className="text-xs text-muted-foreground">Design System & Style Guide</p>
             </div>
           </div>
@@ -95,11 +95,11 @@ const StyleGuide = () => {
             <CardContent className="pt-6">
               <div className="flex items-center gap-6">
                 <div className="h-20 w-20 rounded-xl bg-primary flex items-center justify-center shadow-soft-lg">
-                  <Car className="h-10 w-10 text-primary-foreground" />
+                  <Shield className="h-10 w-10 text-primary-foreground" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold">Vehicle Document Manager</h3>
-                  <p className="text-muted-foreground">Manage your vehicle documents, service records, and ownership transfers securely</p>
+                  <h3 className="text-xl font-semibold">Valt</h3>
+                  <p className="text-muted-foreground">Your secure vault for vehicle documents, service records, and ownership transfers</p>
                 </div>
               </div>
             </CardContent>
@@ -111,7 +111,7 @@ const StyleGuide = () => {
         {/* Color Palette */}
         <section>
           <h2 className="text-2xl font-semibold mb-4">Color Palette</h2>
-          <p className="text-muted-foreground mb-6">A minimal, eye-comfortable palette with soft teal as the primary color and warm neutrals.</p>
+          <p className="text-muted-foreground mb-6">A minimal, eye-comfortable palette with sophisticated slate gray as the primary color and warm neutrals.</p>
           
           <div className="space-y-6">
             {/* Core Colors */}

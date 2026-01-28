@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { checkUserSuspension } from "@/hooks/useSuspensionCheck";
-import { Car, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Shield, Mail, Lock, Eye, EyeOff } from "lucide-react";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -98,7 +98,7 @@ const Auth = () => {
         if (error) throw error;
         toast({
           title: "Account created!",
-          description: "Welcome to Vehicle Manager.",
+          description: "Welcome to Valt.",
         });
       }
     } catch (error: any) {
@@ -122,14 +122,14 @@ const Auth = () => {
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <div className="p-3 bg-primary/10 rounded-full">
-              <Car className="h-8 w-8 text-primary" />
+              <Shield className="h-8 w-8 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl">Vehicle Manager</CardTitle>
+          <CardTitle className="text-2xl">Valt</CardTitle>
           <CardDescription>
             {isLogin
-              ? "Sign in to manage your vehicles and documents"
-              : "Create an account to get started"}
+              ? "Sign in to your secure vault"
+              : "Create your secure vault"}
           </CardDescription>
         </CardHeader>
         <CardContent>
