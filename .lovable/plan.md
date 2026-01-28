@@ -1,344 +1,194 @@
 
+# Plan: Configure Indian Caller ID + Bolna Webhooks
 
-# Voice Call Reminder System - Full Backend Implementation
-
-## Research Summary
-
-After analyzing the Bolna AI API documentation, I can confirm that **everything can be controlled programmatically** - no dashboard configuration is required. The API provides complete flexibility for:
-
-| Capability | API Endpoint | Admin Control Possible? |
-|------------|--------------|------------------------|
-| Create voice agents | `POST /v2/agent` | Yes - full configuration |
-| Update agent prompts | `PATCH /v2/agent/{id}` | Yes - change scripts anytime |
-| Change voice provider | `PUT /v2/agent/{id}` | Yes - switch voices |
-| List available voices | `GET /me/voices` | Yes - show options in UI |
-| Make outbound calls | `POST /call` | Yes - with dynamic variables |
-| Get call history | `GET /calls` | Yes - for logging |
-
-### Available Voice Providers (Indian-friendly)
-- **Sarvam** - Native Indian voices for Hindi, Tamil, Telugu, Kannada
-- **ElevenLabs** - "Nila" voice with Hindi support
-- **Smallest** - Low-latency Indian voices
-- **Deepgram** - Hindi transcription support
+## Overview
+This plan addresses two key requirements:
+1. Ensure all outbound calls use your purchased Indian number (+918035452070) as the caller ID
+2. Create a webhook endpoint to receive call updates from Bolna (status, transcript, duration, recording)
 
 ---
 
-## What You Need from Bolna
+## Part 1: Fix Caller ID
 
-You only need **one secret**: `BOLNA_API_KEY`
+### Problem
+Currently, calls are made without specifying the `from_phone_number` parameter, so Bolna uses their default US number.
 
-The agent ID will be stored in the database, created programmatically via the API, and managed through your admin panel.
+### Solution
+Add the `from_phone_number` parameter to all Bolna `/call` API requests.
 
----
+### Files to Modify
 
-## Implementation Architecture
+**1. supabase/functions/manage-voice-agent/index.ts**
+- Add `from_phone_number: "+918035452070"` to the test call request body (around line 379-389)
+
+**2. supabase/functions/make-voice-call/index.ts**
+- Add `from_phone_number: "+918035452070"` to the production call request body (around line 115)
+
+### Code Changes
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│                      Admin Panel (New Tab)                       │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Voice Agent Configuration                                   ││
-│  │ ├─ Agent Name: [CertChaperone Reminder]                    ││
-│  │ ├─ Voice Provider: [Sarvam ▼] (fetched via API)            ││
-│  │ ├─ Voice: [Meera - Hindi Female ▼]                         ││
-│  │ ├─ Language: [Hindi + English ▼]                           ││
-│  │ ├─ System Prompt: [Editable text area]                     ││
-│  │ ├─ Welcome Message: [Namaste...]                           ││
-│  │ └─ [Save Configuration] [Test Call]                        ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              manage-voice-agent Edge Function                    │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Endpoints:                                                  ││
-│  │ ├─ GET /voices → List available voices from Bolna          ││
-│  │ ├─ POST /agent → Create new agent via Bolna API            ││
-│  │ ├─ PUT /agent → Update agent config via Bolna API          ││
-│  │ ├─ GET /agent → Get current agent configuration            ││
-│  │ └─ POST /test-call → Make test call to admin phone         ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Database: voice_agent_config                  │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ id, bolna_agent_id, agent_name, voice_provider, voice_id,  ││
-│  │ voice_name, language, system_prompt, welcome_message,      ││
-│  │ is_active, created_at, updated_at                          ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
+// In manage-voice-agent/index.ts (test call)
+body: JSON.stringify({
+  agent_id: config.bolna_agent_id,
+  recipient_phone_number: phoneNumber,
+  from_phone_number: "+918035452070",  // <-- ADD THIS
+  user_data: { ... }
+})
+```
+
+```text
+// In make-voice-call/index.ts (production calls)
+body: JSON.stringify({
+  agent_id: agentConfig.bolna_agent_id,
+  recipient_phone_number: profile.phone_number,
+  from_phone_number: "+918035452070",  // <-- ADD THIS
+  user_data: { ... }
+})
 ```
 
 ---
 
-## Implementation Plan
+## Part 2: Create Webhook Endpoint
 
-### Phase 1: Database - Voice Agent Configuration Table
+### New Edge Function: `bolna-webhook`
 
-Create a table to store the Bolna agent configuration (managed by admin):
+This function will receive call status updates from Bolna and store them in the database.
 
+**Location:** `supabase/functions/bolna-webhook/index.ts`
+
+### Webhook Payload Structure (from Bolna)
+```text
+{
+  "execution_id": "uuid",
+  "agent_id": "uuid",
+  "status": "completed|failed|no_answer|busy",
+  "conversation_time": 123,
+  "transcript": "Full conversation text...",
+  "telephony_data": {
+    "duration": 42,
+    "to_number": "+91...",
+    "from_number": "+918035452070",
+    "recording_url": "https://..."
+  }
+}
+```
+
+### Functionality
+1. Receive POST requests from Bolna
+2. Validate the request (basic signature/origin check)
+3. Find the call log by `bolna_call_id` (execution_id)
+4. Update the `voice_call_logs` record with:
+   - status (completed, failed, no_answer)
+   - duration_seconds
+   - transcript (new column needed)
+   - recording_url (new column needed)
+
+---
+
+## Part 3: Database Schema Update
+
+### New Columns for `voice_call_logs` Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| transcript | text | Full conversation transcript |
+| recording_url | text | URL to call recording |
+| hangup_reason | text | Why the call ended |
+| updated_at | timestamptz | Last update timestamp |
+
+### Migration SQL
 ```sql
-CREATE TABLE public.voice_agent_config (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  bolna_agent_id TEXT,                    -- ID returned by Bolna API
-  agent_name TEXT NOT NULL DEFAULT 'CertChaperone Reminder',
-  voice_provider TEXT NOT NULL DEFAULT 'sarvam',
-  voice_id TEXT,
-  voice_name TEXT,
-  language TEXT NOT NULL DEFAULT 'hi',    -- hi, en, ta, te
-  system_prompt TEXT NOT NULL,
-  welcome_message TEXT NOT NULL,
-  call_terminate_seconds INTEGER DEFAULT 60,
-  hangup_after_silence INTEGER DEFAULT 10,
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Only super_admin can manage this
-ALTER TABLE public.voice_agent_config ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Super admins can manage voice config" ON public.voice_agent_config
-  FOR ALL USING (has_role(auth.uid(), 'super_admin'));
+ALTER TABLE voice_call_logs 
+ADD COLUMN IF NOT EXISTS transcript text,
+ADD COLUMN IF NOT EXISTS recording_url text,
+ADD COLUMN IF NOT EXISTS hangup_reason text,
+ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
 ```
 
-### Phase 2: Edge Function - manage-voice-agent
+---
 
-Create a new edge function that interfaces with Bolna API:
+## Part 4: Configuration Required in Bolna Dashboard
 
-**File: `supabase/functions/manage-voice-agent/index.ts`**
+After deployment, you will need to configure the webhook URL in your Bolna dashboard:
 
-```typescript
-// Endpoints:
-// GET ?action=voices → List available voices
-// GET ?action=config → Get current agent config
-// POST { action: "create", config: {...} } → Create agent
-// POST { action: "update", config: {...} } → Update agent
-// POST { action: "test", phoneNumber: "+91..." } → Test call
+**Webhook URL to configure:**
+```
+https://zdvppjgxjyqqwrekougp.supabase.co/functions/v1/bolna-webhook
 ```
 
-Key functionality:
-1. **List Voices**: Call `GET /me/voices` to fetch available voices for dropdown
-2. **Create Agent**: Call `POST /v2/agent` with full configuration
-3. **Update Agent**: Call `PATCH /v2/agent/{id}` when admin changes settings
-4. **Test Call**: Call `POST /call` with admin's phone number
+**Steps in Bolna Dashboard:**
+1. Go to your agent settings
+2. Find the "Webhook" or "Server URL" section
+3. Add the above URL
+4. Ensure the IP `13.203.39.153` (Bolna's webhook source) is allowed
 
-### Phase 3: Edge Function - make-voice-call (already planned)
+---
 
-Modify to read agent configuration from database instead of environment:
+## Part 5: Update Admin UI
 
-```typescript
-// Fetch active agent config
-const { data: agentConfig } = await supabase
-  .from('voice_agent_config')
-  .select('bolna_agent_id')
-  .eq('is_active', true)
-  .single();
+### Enhance Call Logs Display
 
-// Use the stored agent ID
-const response = await fetch('https://api.bolna.ai/call', {
-  method: 'POST',
-  headers: { 'Authorization': `Bearer ${BOLNA_API_KEY}` },
-  body: JSON.stringify({
-    agent_id: agentConfig.bolna_agent_id,
-    recipient_phone_number: profile.phone_number,
-    user_data: { /* dynamic variables */ }
-  })
-});
+Add new columns to the call logs table in `AdminVoiceSettings.tsx`:
+- **Transcript**: Show a preview/expandable transcript
+- **Recording**: Add a play button or download link for recordings
+- **Hangup Reason**: Show why the call ended
+
+---
+
+## Technical Architecture
+
+```text
++-------------------+       +----------------------+
+|   Admin Panel     |       |     Bolna API        |
+|   (Test Call)     |------>|   /call endpoint     |
++-------------------+       +----------------------+
+        |                           |
+        | from_phone_number         | Places call from
+        | "+918035452070"           | +918035452070
+        |                           v
+        |                   +---------------+
+        |                   |  User Phone   |
+        |                   +---------------+
+        |                           |
+        |                           | Call completes
+        |                           v
+        |                   +----------------------+
+        |                   |   Bolna Webhook      |
+        |                   |   (POST to us)       |
+        |                   +----------------------+
+        |                           |
+        |                           v
+        |                   +----------------------+
+        |                   | bolna-webhook Edge   |
+        |                   | Function             |
+        |                   +----------------------+
+        |                           |
+        v                           v
++-----------------------------------------------+
+|           voice_call_logs table               |
+|  (status, transcript, recording_url, etc.)    |
++-----------------------------------------------+
 ```
-
-### Phase 4: Admin Panel - Voice Settings Tab
-
-Add a new tab to the Admin Dashboard:
-
-**File: `src/components/admin/AdminVoiceSettings.tsx`**
-
-Features:
-- Dropdown to select voice provider (Sarvam, ElevenLabs, Smallest)
-- Dropdown to select specific voice (fetched from API)
-- Language selector (Hindi, English, Tamil, Telugu)
-- Editable system prompt with template variables
-- Editable welcome message
-- Call duration and silence timeout sliders
-- "Save Configuration" button (creates/updates Bolna agent)
-- "Send Test Call" button (calls admin's phone)
-- Call logs table showing recent calls and statuses
-
-### Phase 5: User Settings - Phone & Preferences
-
-Create user-facing settings for phone number and preferences:
-
-**File: `src/pages/Settings.tsx`** (or add to Dashboard)
-
-Features:
-- Phone number input with +91 prefix
-- Phone verification toggle (future: OTP verification)
-- Voice reminders enabled/disabled toggle
-- Preferred language selector
 
 ---
 
 ## Files to Create/Modify
 
-| File | Action | Purpose |
-|------|--------|---------|
-| Database migration | Create | Add `voice_agent_config` table |
-| `supabase/functions/manage-voice-agent/index.ts` | Create | Admin API for Bolna agent management |
-| `supabase/functions/make-voice-call/index.ts` | Create | Make calls using stored agent config |
-| `src/components/admin/AdminVoiceSettings.tsx` | Create | Admin UI for voice configuration |
-| `src/pages/Admin.tsx` | Modify | Add Voice Settings tab |
-| `src/pages/Settings.tsx` | Create | User phone/preference settings |
-| `src/App.tsx` | Modify | Add Settings route |
-| `supabase/config.toml` | Modify | Add new edge function |
+| File | Action | Description |
+|------|--------|-------------|
+| `supabase/functions/manage-voice-agent/index.ts` | Modify | Add `from_phone_number` to test calls |
+| `supabase/functions/make-voice-call/index.ts` | Modify | Add `from_phone_number` to production calls |
+| `supabase/functions/bolna-webhook/index.ts` | Create | New webhook endpoint for call updates |
+| `supabase/config.toml` | Modify | Add bolna-webhook function config |
+| `src/components/admin/AdminVoiceSettings.tsx` | Modify | Display transcript & recording in logs |
+| Database migration | Create | Add transcript, recording_url columns |
 
 ---
 
-## Admin Voice Settings UI Mockup
+## Summary
 
-```text
-┌────────────────────────────────────────────────────────────────────┐
-│  🎙️ Voice Agent Configuration                                      │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  Agent Status: ● Active (ID: abc123...)        [Deactivate]       │
-│                                                                    │
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │ Voice Settings                                              │  │
-│  │                                                             │  │
-│  │ Provider:    [Sarvam          ▼]                           │  │
-│  │ Voice:       [Meera (Hindi Female) ▼]                      │  │
-│  │ Language:    [Hindi           ▼]                           │  │
-│  │                                                             │  │
-│  │ Call Settings:                                             │  │
-│  │ Max Duration: [60] seconds                                 │  │
-│  │ Silence Timeout: [10] seconds                              │  │
-│  └─────────────────────────────────────────────────────────────┘  │
-│                                                                    │
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │ Script Configuration                                        │  │
-│  │                                                             │  │
-│  │ System Prompt:                                              │  │
-│  │ ┌─────────────────────────────────────────────────────────┐│  │
-│  │ │ You are a helpful assistant from CertChaperone.        ││  │
-│  │ │ You are calling {{owner_name}} about vehicle           ││  │
-│  │ │ {{vehicle_number}}. The {{document_type}}              ││  │
-│  │ │ {{days_message}}. Be warm and helpful.                 ││  │
-│  │ └─────────────────────────────────────────────────────────┘│  │
-│  │                                                             │  │
-│  │ Welcome Message:                                            │  │
-│  │ ┌─────────────────────────────────────────────────────────┐│  │
-│  │ │ Namaste {{owner_name}} ji! CertChaperone se bol rahe   ││  │
-│  │ │ hain. Aapki gaadi ke documents ke baare mein call hai. ││  │
-│  │ └─────────────────────────────────────────────────────────┘│  │
-│  │                                                             │  │
-│  │ Available Variables: {{owner_name}}, {{vehicle_number}},   │  │
-│  │ {{document_type}}, {{days_message}}                        │  │
-│  └─────────────────────────────────────────────────────────────┘  │
-│                                                                    │
-│  [💾 Save Configuration]    [📞 Send Test Call]                   │
-│                                                                    │
-├────────────────────────────────────────────────────────────────────┤
-│  📊 Recent Call Logs                                               │
-│  ┌────────────────────────────────────────────────────────────┐   │
-│  │ Phone         │ Vehicle   │ Status    │ Duration │ Time    │   │
-│  │ +91 98xxx     │ KL01AY... │ Completed │ 28s      │ 2h ago  │   │
-│  │ +91 87xxx     │ MH12AB... │ No Answer │ -        │ 5h ago  │   │
-│  └────────────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Required Secret
-
-| Secret | Purpose |
-|--------|---------|
-| `BOLNA_API_KEY` | Single API key for all Bolna operations |
-
-No agent ID needed as a secret - it will be stored in the database after programmatic creation.
-
----
-
-## Technical Notes
-
-### Bolna Agent Creation Payload
-
-When admin saves configuration, we send this to Bolna:
-
-```json
-{
-  "agent_config": {
-    "agent_name": "CertChaperone Reminder",
-    "agent_welcome_message": "Namaste {{owner_name}} ji!...",
-    "tasks": [{
-      "task_type": "conversation",
-      "tools_config": {
-        "synthesizer": {
-          "provider": "sarvam",
-          "provider_config": {
-            "voice": "meera",
-            "model": "bulbul:v1"
-          }
-        },
-        "transcriber": {
-          "provider": "deepgram",
-          "model": "nova-3",
-          "language": "hi"
-        },
-        "llm_agent": {
-          "llm_config": {
-            "provider": "openai",
-            "model": "gpt-4.1-mini",
-            "temperature": 0.3
-          }
-        }
-      },
-      "task_config": {
-        "call_terminate": 60,
-        "hangup_after_silence": 10
-      }
-    }]
-  },
-  "agent_prompts": {
-    "task_1": {
-      "system_prompt": "You are a helpful assistant..."
-    }
-  }
-}
-```
-
-### Dynamic Variables in Calls
-
-When making calls, we pass user-specific data:
-
-```json
-{
-  "agent_id": "stored-agent-id",
-  "recipient_phone_number": "+919876543210",
-  "user_data": {
-    "owner_name": "Subhash",
-    "vehicle_number": "KL01CX6504",
-    "document_type": "Insurance",
-    "days_message": "7 din mein expire hone wala hai"
-  }
-}
-```
-
----
-
-## Next Steps
-
-1. You create a Bolna account at bolna.ai
-2. Get the API key from your Bolna dashboard
-3. Provide the API key when prompted
-4. I'll implement the full system with admin controls
-
-This approach gives you **complete control** over:
-- Voice selection (can change anytime from admin panel)
-- Script/prompt content (edit directly in UI)
-- Call behavior (duration, silence timeout)
-- Language settings
-- Testing before going live
-
+1. **Immediate fix**: Add `from_phone_number: "+918035452070"` to both Edge Functions to ensure calls come from your Indian number
+2. **Webhook endpoint**: Create a new Edge Function to receive call updates from Bolna
+3. **Database update**: Add columns to store transcript and recording data
+4. **UI enhancement**: Show richer call data in the admin panel
+5. **Manual step**: You'll need to configure the webhook URL in your Bolna dashboard after deployment
