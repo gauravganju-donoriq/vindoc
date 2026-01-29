@@ -26,7 +26,9 @@ import {
   BadgeCheck,
   HandCoins,
   ShieldCheck,
-  ClipboardCheck
+  ClipboardCheck,
+  LifeBuoy,
+  Package
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -257,7 +259,7 @@ const FeaturesSlide = () => {
     {
       icon: FolderOpen,
       title: "Document Storage",
-      description: "Store photos of all your documents — insurance, RC, PUCC, fitness certificate",
+      description: "Store photos of all your documents: insurance, RC, PUCC, fitness certificate",
     },
     {
       icon: Car,
@@ -268,6 +270,16 @@ const FeaturesSlide = () => {
       icon: Smartphone,
       title: "Multi-device Access",
       description: "Access your documents from your phone, tablet, or computer",
+    },
+    {
+      icon: LifeBuoy,
+      title: "Roadside Assistance",
+      description: "Stranded? Request help and get connected to verified assistance in minutes",
+    },
+    {
+      icon: Wrench,
+      title: "Parts Sourcing",
+      description: "Request used or OEM parts and get quotes delivered. No dealer runs.",
     },
   ];
 
@@ -284,7 +296,7 @@ const FeaturesSlide = () => {
         </h2>
       </motion.div>
 
-      <div className="grid md:grid-cols-2 gap-6 max-w-4xl w-full">
+      <div className="grid md:grid-cols-3 gap-6 max-w-5xl w-full">
         {features.map((feature, index) => (
           <motion.div
             key={index}
@@ -303,6 +315,95 @@ const FeaturesSlide = () => {
           </motion.div>
         ))}
       </div>
+    </div>
+  );
+};
+
+const ServicesSlide = () => {
+  const services = [
+    {
+      icon: LifeBuoy,
+      title: "Help When You Need It",
+      description: "Stranded on the road? Request roadside assistance and get connected to verified help in minutes.",
+      highlight: true,
+    },
+    {
+      icon: Wrench,
+      title: "Find Parts, Skip the Hassle",
+      description: "Need a spare part? Request used or OEM parts and get quotes delivered to you. No dealer runs.",
+      highlight: true,
+    },
+    {
+      icon: UserCheck,
+      title: "Expert Inspections",
+      description: "Hire a VinDoc-certified expert to inspect any vehicle before you buy.",
+      highlight: false,
+      comingSoon: true,
+    },
+  ];
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full px-8 bg-gray-900 text-white">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center mb-12"
+      >
+        <p className="text-gray-400 text-sm font-medium mb-3">SERVICES</p>
+        <h2 className="text-3xl md:text-4xl font-semibold mb-4">
+          More than just documents
+        </h2>
+        <p className="text-gray-400 max-w-2xl">
+          VinDoc is your complete vehicle ownership companion. Get help when you need it, find parts easily, and keep your vehicle running smoothly.
+        </p>
+      </motion.div>
+
+      <div className="grid md:grid-cols-3 gap-6 max-w-5xl w-full">
+        {services.map((service, index) => (
+          <motion.div
+            key={index}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 + index * 0.1 }}
+            className={`border p-6 text-center ${
+              service.highlight ? "border-white bg-white/5" : "border-gray-700"
+            }`}
+          >
+            <div className={`w-14 h-14 border flex items-center justify-center mx-auto mb-4 ${
+              service.highlight ? "border-white" : "border-gray-600"
+            }`}>
+              <service.icon className="h-7 w-7 text-white" />
+            </div>
+            <h3 className="font-semibold text-white mb-2">{service.title}</h3>
+            <p className="text-gray-400 text-sm">{service.description}</p>
+            {service.comingSoon && (
+              <span className="inline-block mt-3 text-xs bg-gray-800 text-gray-400 px-2 py-1 border border-gray-700">
+                Coming Soon
+              </span>
+            )}
+          </motion.div>
+        ))}
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.6 }}
+        className="mt-12 flex items-center gap-8 text-gray-500 text-sm"
+      >
+        <div className="flex items-center gap-2">
+          <CheckCircle className="h-4 w-4" />
+          <span>Verified helpers</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Package className="h-4 w-4" />
+          <span>Quality parts</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4" />
+          <span>Quick response</span>
+        </div>
+      </motion.div>
     </div>
   );
 };
@@ -464,6 +565,8 @@ const RoadmapSlide = () => {
         { icon: FolderOpen, text: "Document storage" },
         { icon: Bell, text: "Email reminders" },
         { icon: Car, text: "Vehicle profiles" },
+        { icon: LifeBuoy, text: "Roadside assistance" },
+        { icon: Wrench, text: "Parts sourcing" },
       ],
     },
     {
@@ -480,8 +583,8 @@ const RoadmapSlide = () => {
       status: "vision",
       items: [
         { icon: Zap, text: "Document scanning (OCR)" },
-        { icon: Wrench, text: "Service center integration" },
         { icon: Globe, text: "Pan-India coverage" },
+        { icon: Package, text: "Parts delivery tracking" },
       ],
     },
   ];
@@ -599,6 +702,7 @@ const Deck = () => {
     { id: "problem", component: ProblemSlide, bg: "bg-gray-50" },
     { id: "solution", component: SolutionSlide, bg: "bg-gray-900" },
     { id: "features", component: FeaturesSlide, bg: "bg-white" },
+    { id: "services", component: ServicesSlide, bg: "bg-gray-900" },
     { id: "marketplace", component: MarketplaceSlide, bg: "bg-gray-900" },
     { id: "how-it-works", component: HowItWorksSlide, bg: "bg-gray-50" },
     { id: "roadmap", component: RoadmapSlide, bg: "bg-white" },
