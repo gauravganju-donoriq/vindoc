@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import PendingTransfers from "@/components/transfers/PendingTransfers";
 import { PendingOwnershipClaims } from "@/components/transfers/PendingOwnershipClaims";
+import ChallanSummaryWidget from "@/components/dashboard/ChallanSummaryWidget";
 import { DashboardLayout, DashboardSkeleton } from "@/components/layout/DashboardLayout";
 import { toTitleCase } from "@/lib/utils";
 
@@ -391,6 +392,9 @@ const Dashboard = () => {
 
       {/* Pending Transfers Section */}
       <PendingTransfers userEmail={userEmail} onTransferAccepted={fetchVehicles} />
+
+      {/* Challan Summary Widget */}
+      <ChallanSummaryWidget vehicleIds={vehicles.map(v => v.id)} />
 
       {/* Vehicle Grid - 2 columns on xl+ */}
       {vehicles.length === 0 ? (
