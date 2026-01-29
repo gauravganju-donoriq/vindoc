@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { XCircle, CheckCircle, ArrowRight, FileQuestion, Bell, AlertTriangle, FileCheck, BellRing, Shield } from "lucide-react";
+import { XCircle, CheckCircle, ArrowRight, FileQuestion, AlertTriangle, FileCheck, BellRing, Shield, PhoneOff, LifeBuoy } from "lucide-react";
 import { FadeInView, StaggerContainer, StaggerItem } from "./animations";
 
 interface ComparisonItemProps {
@@ -34,12 +34,14 @@ export const BeforeAfter = () => {
   const beforeItems = [
     { icon: FileQuestion, text: "Scattered papers in glove box" },
     { icon: AlertTriangle, text: "Missed renewal deadlines" },
-    { icon: XCircle, text: "Surprise fines & challans" },
+    { icon: PhoneOff, text: "Scrambling for help when stranded" },
+    { icon: XCircle, text: "Surprise fines and challans" },
   ];
 
   const afterItems = [
     { icon: FileCheck, text: "Everything in one secure place" },
     { icon: BellRing, text: "Smart reminders before expiry" },
+    { icon: LifeBuoy, text: "One tap to request roadside help" },
     { icon: Shield, text: "Complete peace of mind" },
   ];
 

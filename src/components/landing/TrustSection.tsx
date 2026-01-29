@@ -1,12 +1,13 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { Zap, Smartphone, Bell, FolderOpen, CheckCircle, ChevronDown } from "lucide-react";
+import { Zap, Smartphone, Bell, FolderOpen, CheckCircle, ChevronDown, LifeBuoy } from "lucide-react";
 import { FadeInView, StaggerContainer, StaggerItem } from "./animations";
 
 const trustBadges = [
   { icon: Zap, label: "Simple Setup" },
   { icon: Smartphone, label: "Multi-device Access" },
   { icon: Bell, label: "Renewal Reminders" },
+  { icon: LifeBuoy, label: "Roadside Help" },
   { icon: FolderOpen, label: "Document Storage" },
 ];
 
@@ -14,6 +15,8 @@ const whyChooseUs = [
   "All your documents in one place",
   "Never miss a renewal deadline",
   "Smart reminders via email or push notification",
+  "Roadside assistance on demand",
+  "Easy parts sourcing for repairs",
   "Service history tracking",
   "Easy to share with buyers",
   "Works on all devices",
@@ -29,12 +32,20 @@ const faqs = [
     answer: "Simply enter your vehicle number and upload photos of your documents. VinDoc organizes everything and reminds you before anything expires."
   },
   {
+    question: "How does roadside assistance work?",
+    answer: "Simply open VinDoc, select your vehicle, and tap Request Assistance. Describe your situation and location, and we will connect you with verified help nearby."
+  },
+  {
+    question: "Can I request vehicle parts through VinDoc?",
+    answer: "Yes! You can request used or OEM parts for any of your vehicles. Our team sources quotes from trusted vendors and delivers them to you."
+  },
+  {
     question: "What happens when a document is about to expire?",
     answer: "We send you reminders starting 30 days before expiry. You can choose to be notified via email or push notification."
   },
   {
     question: "Can I add multiple vehicles?",
-    answer: "Yes! You can add and manage as many vehicles as you want — cars, bikes, trucks, all supported. Each vehicle has its own dedicated profile and document set."
+    answer: "Yes! You can add and manage as many vehicles as you want. Cars, bikes, trucks, all supported. Each vehicle has its own dedicated profile and document set."
   },
 ];
 
@@ -96,7 +107,7 @@ export const TrustSection = () => {
           </p>
         </FadeInView>
 
-        <StaggerContainer className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto mb-12">
+        <StaggerContainer className="grid grid-cols-2 md:grid-cols-5 gap-6 max-w-5xl mx-auto mb-12">
           {trustBadges.map((badge, index) => (
             <StaggerItem key={index}>
               <div className="flex flex-col items-center text-center p-6 bg-white border border-gray-200">
