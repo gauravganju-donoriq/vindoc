@@ -1,126 +1,190 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
+// Standardized CORS headers
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const ADMIN_EMAIL = "lestero@ignitecinc.com";
+// Valid action types whitelist
+const VALID_ACTION_TYPES = [
+  "overview", "users", "activity", "vehicles", "transfers", "claims", "listings",
+  "suspend_user", "unsuspend_user", "set_vehicle_verification", "get_vehicle_for_claim",
+  "update_claim_status", "update_listing_status"
+] as const;
+
+// Input validation schemas
+const ActionTypeSchema = z.enum(VALID_ACTION_TYPES);
+
+const SuspendUserSchema = z.object({
+  type: z.literal("suspend_user"),
+  userId: z.string().uuid("Invalid user ID format"),
+  reason: z.string().max(500).optional().nullable(),
+});
+
+const UnsuspendUserSchema = z.object({
+  type: z.literal("unsuspend_user"),
+  userId: z.string().uuid("Invalid user ID format"),
+});
+
+const SetVerificationSchema = z.object({
+  type: z.literal("set_vehicle_verification"),
+  vehicleId: z.string().uuid("Invalid vehicle ID format"),
+  isVerified: z.boolean(),
+});
+
+const GetVehicleForClaimSchema = z.object({
+  type: z.literal("get_vehicle_for_claim"),
+  registrationNumber: z.string().min(1).max(20).transform(s => s.trim().toUpperCase()),
+});
+
+const UpdateClaimStatusSchema = z.object({
+  type: z.literal("update_claim_status"),
+  claimId: z.string().uuid("Invalid claim ID format"),
+  status: z.enum(["resolved", "rejected", "expired"]),
+});
+
+const UpdateListingStatusSchema = z.object({
+  type: z.literal("update_listing_status"),
+  listingId: z.string().uuid("Invalid listing ID format"),
+  status: z.enum(["approved", "rejected", "on_hold"]),
+  adminNotes: z.string().max(1000).optional().nullable(),
+});
+
+// Standardized error response
+function errorResponse(message: string, status: number, errorCode: string, details?: object) {
+  return new Response(
+    JSON.stringify({ success: false, error: message, errorCode, details }),
+    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+// Success response helper
+function successResponse(data: Record<string, unknown>) {
+  return new Response(
+    JSON.stringify({ success: true, ...data }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+// Pagination defaults
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 100;
 
 Deno.serve(async (req) => {
+  const requestId = crypto.randomUUID();
+  const startTime = Date.now();
+
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verify authorization
+    // ============= PHASE 1: AUTHENTICATION =============
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      console.log(`[${requestId}] Missing or invalid auth header`);
+      return errorResponse("Unauthorized", 401, "AUTH_MISSING");
     }
 
-    // Create client with user's token to verify identity
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // Validate environment variables
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
+      console.error(`[${requestId}] Missing required environment variables`);
+      return errorResponse("Server configuration error", 500, "CONFIG_ERROR");
+    }
 
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Verify the user and get their email using getUser()
-    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    // Verify the user using getClaims for efficiency
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
     
-    if (userError || !user) {
-      console.error("Auth error:", userError);
-      return new Response(
-        JSON.stringify({ error: "Invalid token" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (claimsError || !claimsData?.claims) {
+      console.log(`[${requestId}] Invalid token:`, claimsError?.message);
+      return errorResponse("Invalid token", 401, "AUTH_INVALID");
     }
 
-    const userEmail = user.email;
-    const userId = user.id;
+    const userId = claimsData.claims.sub as string;
+    const userEmail = claimsData.claims.email as string;
 
-    // Check if user is the admin
-    if (userEmail !== ADMIN_EMAIL) {
-      return new Response(
-        JSON.stringify({ error: "Forbidden - Admin access required" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Create admin client with service role key to bypass RLS
+    // ============= PHASE 2: AUTHORIZATION (Role-based) =============
+    // Create admin client with service role key to check role
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Ensure the admin has the super_admin role
-    const { data: existingRole } = await adminClient
-      .from("user_roles")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("role", "super_admin")
-      .single();
+    // Check if user has super_admin role using has_role function
+    const { data: hasAdminRole, error: roleError } = await adminClient.rpc("has_role", {
+      _user_id: userId,
+      _role: "super_admin",
+    });
 
-    if (!existingRole) {
-      // Assign super_admin role to this user
-      await adminClient.from("user_roles").insert({
-        user_id: userId,
-        role: "super_admin",
-      });
-      console.log(`Assigned super_admin role to ${userEmail}`);
+    if (roleError) {
+      console.error(`[${requestId}] Role check error:`, roleError);
+      return errorResponse("Authorization check failed", 500, "ROLE_CHECK_FAILED");
     }
 
-    // Parse request body
+    if (!hasAdminRole) {
+      console.log(`[${requestId}] Access denied for user ${userEmail} - no super_admin role`);
+      return errorResponse("Forbidden - Admin access required", 403, "FORBIDDEN");
+    }
+
+    console.log(`[${requestId}] Admin access granted for ${userEmail}`);
+
+    // ============= PHASE 3: PARSE AND VALIDATE REQUEST =============
     let body: Record<string, unknown> = {};
     try {
-      body = await req.json();
+      const text = await req.text();
+      if (text) {
+        body = JSON.parse(text);
+      }
     } catch {
-      // If no body or invalid JSON, use empty object
+      return errorResponse("Invalid JSON body", 400, "INVALID_JSON");
     }
 
-    const dataType = (body?.type as string) || "overview";
+    const dataType = body?.type as string || "overview";
+    
+    // Validate action type is in whitelist
+    const actionResult = ActionTypeSchema.safeParse(dataType);
+    if (!actionResult.success) {
+      return errorResponse(`Invalid action type: ${dataType}`, 400, "INVALID_ACTION");
+    }
+
+    // Pagination parameters
+    const page = Math.max(1, Number(body?.page) || 1);
+    const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(body?.pageSize) || DEFAULT_PAGE_SIZE));
+    const offset = (page - 1) * pageSize;
+
     let responseData: Record<string, unknown> = {};
 
+    // ============= PHASE 4: EXECUTE ACTION =============
     switch (dataType) {
       case "overview": {
-        // Get distinct users from auth (count users with vehicles)
-        const { data: vehicleUsers } = await adminClient
-          .from("vehicles")
-          .select("user_id");
-        
-        const uniqueUserIds = new Set(vehicleUsers?.map(v => v.user_id) || []);
+        // Optimized: Use parallel queries and counts
+        const [vehicleUsersResult, vehiclesCountResult, verifiedCountResult, documentsCountResult, suspendedCountResult, expiringResult] = await Promise.all([
+          adminClient.from("vehicles").select("user_id"),
+          adminClient.from("vehicles").select("*", { count: "exact", head: true }),
+          adminClient.from("vehicles").select("*", { count: "exact", head: true }).eq("is_verified", true),
+          adminClient.from("documents").select("*", { count: "exact", head: true }),
+          adminClient.from("user_suspensions").select("*", { count: "exact", head: true }),
+          adminClient.from("vehicles").select("id, insurance_expiry, pucc_valid_upto, fitness_valid_upto, road_tax_valid_upto"),
+        ]);
 
-        // Get total vehicles
-        const { count: vehiclesCount } = await adminClient
-          .from("vehicles")
-          .select("*", { count: "exact", head: true });
+        const uniqueUserIds = new Set(vehicleUsersResult.data?.map(v => v.user_id) || []);
 
-        // Get verified vehicles
-        const { count: verifiedCount } = await adminClient
-          .from("vehicles")
-          .select("*", { count: "exact", head: true })
-          .eq("is_verified", true);
-
-        // Get total documents
-        const { count: documentsCount } = await adminClient
-          .from("documents")
-          .select("*", { count: "exact", head: true });
-
-        // Get documents expiring this month
+        // Count expiring documents this month
         const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
-
-        const { data: expiringVehicles } = await adminClient
-          .from("vehicles")
-          .select("id, insurance_expiry, pucc_valid_upto, fitness_valid_upto, road_tax_valid_upto");
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
 
         let expiringCount = 0;
-        expiringVehicles?.forEach(v => {
+        expiringResult.data?.forEach(v => {
           const dates = [v.insurance_expiry, v.pucc_valid_upto, v.fitness_valid_upto, v.road_tax_valid_upto];
           dates.forEach(date => {
             if (date && date >= startOfMonth && date <= endOfMonth) {
@@ -129,24 +193,19 @@ Deno.serve(async (req) => {
           });
         });
 
-        // Get suspended users count
-        const { count: suspendedCount } = await adminClient
-          .from("user_suspensions")
-          .select("*", { count: "exact", head: true });
-
         responseData = {
           totalUsers: uniqueUserIds.size,
-          totalVehicles: vehiclesCount || 0,
-          verifiedVehicles: verifiedCount || 0,
-          totalDocuments: documentsCount || 0,
+          totalVehicles: vehiclesCountResult.count || 0,
+          verifiedVehicles: verifiedCountResult.count || 0,
+          totalDocuments: documentsCountResult.count || 0,
           expiringThisMonth: expiringCount,
-          suspendedUsers: suspendedCount || 0,
+          suspendedUsers: suspendedCountResult.count || 0,
         };
         break;
       }
 
       case "users": {
-        // Get all users with vehicle counts
+        // Optimized: Fetch paginated data with batch user lookups
         const { data: vehicles } = await adminClient
           .from("vehicles")
           .select("user_id, id, created_at");
@@ -155,7 +214,6 @@ Deno.serve(async (req) => {
           .from("documents")
           .select("user_id");
 
-        // Get suspended users
         const { data: suspensions } = await adminClient
           .from("user_suspensions")
           .select("user_id, suspended_at, reason");
@@ -181,7 +239,13 @@ Deno.serve(async (req) => {
           }
         });
 
-        // Get user emails from auth.users via admin API
+        // Get user list and apply pagination
+        const allUserIds = Array.from(userMap.keys());
+        const totalCount = allUserIds.length;
+        const paginatedUserIds = allUserIds.slice(offset, offset + pageSize);
+
+        // Batch lookup users (parallel, limited batch size)
+        const BATCH_SIZE = 10;
         const users: Array<{
           userId: string;
           email: string;
@@ -193,196 +257,184 @@ Deno.serve(async (req) => {
           suspensionReason: string | null;
         }> = [];
 
-        for (const [uId, stats] of userMap) {
-          const { data: userData } = await adminClient.auth.admin.getUserById(uId);
-          const suspension = suspensionMap.get(uId);
-          users.push({
-            userId: uId,
-            email: userData?.user?.email || "Unknown",
-            vehicleCount: stats.vehicleCount,
-            documentCount: stats.documentCount,
-            joinDate: stats.firstVehicleDate,
-            isSuspended: !!suspension,
-            suspendedAt: suspension?.suspended_at || null,
-            suspensionReason: suspension?.reason || null,
+        for (let i = 0; i < paginatedUserIds.length; i += BATCH_SIZE) {
+          const batch = paginatedUserIds.slice(i, i + BATCH_SIZE);
+          const userPromises = batch.map(async (uId) => {
+            const { data: userData } = await adminClient.auth.admin.getUserById(uId);
+            const stats = userMap.get(uId)!;
+            const suspension = suspensionMap.get(uId);
+            return {
+              userId: uId,
+              email: userData?.user?.email || "Unknown",
+              vehicleCount: stats.vehicleCount,
+              documentCount: stats.documentCount,
+              joinDate: stats.firstVehicleDate,
+              isSuspended: !!suspension,
+              suspendedAt: suspension?.suspended_at || null,
+              suspensionReason: suspension?.reason || null,
+            };
           });
+          const batchResults = await Promise.all(userPromises);
+          users.push(...batchResults);
         }
 
-        responseData = { users };
+        responseData = { 
+          users, 
+          pagination: { page, pageSize, totalCount, totalPages: Math.ceil(totalCount / pageSize) }
+        };
         break;
       }
 
       case "activity": {
-        // Get recent activity from vehicle_history
-        const { data: activity } = await adminClient
+        // Paginated activity with batch enrichment
+        const { data: activity, count } = await adminClient
           .from("vehicle_history")
-          .select(`
-            id,
-            event_type,
-            event_description,
-            created_at,
-            user_id,
-            vehicle_id,
-            metadata
-          `)
+          .select("id, event_type, event_description, created_at, user_id, vehicle_id, metadata", { count: "exact" })
           .order("created_at", { ascending: false })
-          .limit(100);
+          .range(offset, offset + pageSize - 1);
 
-        // Enrich with user emails and vehicle reg numbers
+        // Batch enrich with user emails and vehicle numbers
         const enrichedActivity = await Promise.all(
           (activity || []).map(async (a) => {
-            const { data: userData } = await adminClient.auth.admin.getUserById(a.user_id);
-            const { data: vehicleData } = await adminClient
-              .from("vehicles")
-              .select("registration_number")
-              .eq("id", a.vehicle_id)
-              .single();
-
+            const [userResult, vehicleResult] = await Promise.all([
+              adminClient.auth.admin.getUserById(a.user_id),
+              adminClient.from("vehicles").select("registration_number").eq("id", a.vehicle_id).maybeSingle(),
+            ]);
             return {
               ...a,
-              userEmail: userData?.user?.email || "Unknown",
-              registrationNumber: vehicleData?.registration_number || "Deleted",
+              userEmail: userResult.data?.user?.email || "Unknown",
+              registrationNumber: vehicleResult.data?.registration_number || "Deleted",
             };
           })
         );
 
-        responseData = { activity: enrichedActivity };
+        responseData = { 
+          activity: enrichedActivity,
+          pagination: { page, pageSize, totalCount: count || 0, totalPages: Math.ceil((count || 0) / pageSize) }
+        };
         break;
       }
 
       case "vehicles": {
-        // Get all vehicles with user emails
-        const { data: vehicles } = await adminClient
+        // Paginated vehicles
+        const { data: vehicles, count } = await adminClient
           .from("vehicles")
-          .select("*")
-          .order("created_at", { ascending: false });
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(offset, offset + pageSize - 1);
 
-        const enrichedVehicles = await Promise.all(
-          (vehicles || []).map(async (v) => {
+        const BATCH_SIZE = 10;
+        const enrichedVehicles: Array<Record<string, unknown>> = [];
+
+        for (let i = 0; i < (vehicles?.length || 0); i += BATCH_SIZE) {
+          const batch = (vehicles || []).slice(i, i + BATCH_SIZE);
+          const batchPromises = batch.map(async (v) => {
             const { data: userData } = await adminClient.auth.admin.getUserById(v.user_id);
-            return {
-              ...v,
-              userEmail: userData?.user?.email || "Unknown",
-            };
-          })
-        );
+            return { ...v, userEmail: userData?.user?.email || "Unknown" };
+          });
+          const batchResults = await Promise.all(batchPromises);
+          enrichedVehicles.push(...batchResults);
+        }
 
-        responseData = { vehicles: enrichedVehicles };
+        responseData = { 
+          vehicles: enrichedVehicles,
+          pagination: { page, pageSize, totalCount: count || 0, totalPages: Math.ceil((count || 0) / pageSize) }
+        };
         break;
       }
 
       case "transfers": {
-        // Get all transfers
-        const { data: transfers } = await adminClient
+        const { data: transfers, count } = await adminClient
           .from("vehicle_transfers")
-          .select("*")
-          .order("created_at", { ascending: false });
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(offset, offset + pageSize - 1);
 
         const enrichedTransfers = await Promise.all(
           (transfers || []).map(async (t) => {
-            const { data: senderData } = await adminClient.auth.admin.getUserById(t.sender_id);
-            const { data: vehicleData } = await adminClient
-              .from("vehicles")
-              .select("registration_number, maker_model")
-              .eq("id", t.vehicle_id)
-              .single();
-
+            const [senderResult, vehicleResult] = await Promise.all([
+              adminClient.auth.admin.getUserById(t.sender_id),
+              adminClient.from("vehicles").select("registration_number, maker_model").eq("id", t.vehicle_id).maybeSingle(),
+            ]);
             return {
               ...t,
-              senderEmail: senderData?.user?.email || "Unknown",
-              registrationNumber: vehicleData?.registration_number || "Deleted",
-              makerModel: vehicleData?.maker_model || null,
+              senderEmail: senderResult.data?.user?.email || "Unknown",
+              registrationNumber: vehicleResult.data?.registration_number || "Deleted",
+              makerModel: vehicleResult.data?.maker_model || null,
             };
           })
         );
 
-        responseData = { transfers: enrichedTransfers };
+        responseData = { 
+          transfers: enrichedTransfers,
+          pagination: { page, pageSize, totalCount: count || 0, totalPages: Math.ceil((count || 0) / pageSize) }
+        };
         break;
       }
 
-      // Admin actions
       case "suspend_user": {
-        const targetUserId = body?.userId as string;
-        const reason = (body?.reason as string) || null;
-
-        if (!targetUserId) {
-          return new Response(
-            JSON.stringify({ error: "userId is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        const validation = SuspendUserSchema.safeParse(body);
+        if (!validation.success) {
+          return errorResponse(validation.error.errors[0]?.message || "Invalid input", 400, "VALIDATION_ERROR");
         }
 
-        // Check if already suspended
+        const { userId: targetUserId, reason } = validation.data;
+
+        // Prevent self-suspension
+        if (targetUserId === userId) {
+          return errorResponse("Cannot suspend yourself", 400, "SELF_SUSPENSION");
+        }
+
         const { data: existing } = await adminClient
           .from("user_suspensions")
           .select("id")
           .eq("user_id", targetUserId)
-          .single();
+          .maybeSingle();
 
         if (existing) {
-          return new Response(
-            JSON.stringify({ error: "User is already suspended" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          return errorResponse("User is already suspended", 400, "ALREADY_SUSPENDED");
         }
 
         const { error: suspendError } = await adminClient
           .from("user_suspensions")
-          .insert({
-            user_id: targetUserId,
-            suspended_by: userId,
-            reason,
-          });
+          .insert({ user_id: targetUserId, suspended_by: userId, reason });
 
         if (suspendError) {
-          console.error("Suspend error:", suspendError);
-          return new Response(
-            JSON.stringify({ error: "Failed to suspend user" }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          console.error(`[${requestId}] Suspend error:`, suspendError);
+          return errorResponse("Failed to suspend user", 500, "SUSPEND_FAILED");
         }
 
-        responseData = { success: true, message: "User suspended" };
+        responseData = { message: "User suspended" };
         break;
       }
 
       case "unsuspend_user": {
-        const targetUserId = body?.userId as string;
-
-        if (!targetUserId) {
-          return new Response(
-            JSON.stringify({ error: "userId is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        const validation = UnsuspendUserSchema.safeParse(body);
+        if (!validation.success) {
+          return errorResponse(validation.error.errors[0]?.message || "Invalid input", 400, "VALIDATION_ERROR");
         }
 
         const { error: unsuspendError } = await adminClient
           .from("user_suspensions")
           .delete()
-          .eq("user_id", targetUserId);
+          .eq("user_id", validation.data.userId);
 
         if (unsuspendError) {
-          console.error("Unsuspend error:", unsuspendError);
-          return new Response(
-            JSON.stringify({ error: "Failed to unsuspend user" }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          console.error(`[${requestId}] Unsuspend error:`, unsuspendError);
+          return errorResponse("Failed to unsuspend user", 500, "UNSUSPEND_FAILED");
         }
 
-        responseData = { success: true, message: "User unsuspended" };
+        responseData = { message: "User unsuspended" };
         break;
       }
 
       case "set_vehicle_verification": {
-        const vehicleId = body?.vehicleId as string;
-        const isVerified = body?.isVerified as boolean;
-
-        if (!vehicleId || typeof isVerified !== "boolean") {
-          return new Response(
-            JSON.stringify({ error: "vehicleId and isVerified are required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        const validation = SetVerificationSchema.safeParse(body);
+        if (!validation.success) {
+          return errorResponse(validation.error.errors[0]?.message || "Invalid input", 400, "VALIDATION_ERROR");
         }
+
+        const { vehicleId, isVerified } = validation.data;
 
         const { error: updateError } = await adminClient
           .from("vehicles")
@@ -393,11 +445,8 @@ Deno.serve(async (req) => {
           .eq("id", vehicleId);
 
         if (updateError) {
-          console.error("Verification update error:", updateError);
-          return new Response(
-            JSON.stringify({ error: "Failed to update verification status" }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          console.error(`[${requestId}] Verification update error:`, updateError);
+          return errorResponse("Failed to update verification status", 500, "UPDATE_FAILED");
         }
 
         // Log to vehicle history
@@ -405,7 +454,7 @@ Deno.serve(async (req) => {
           .from("vehicles")
           .select("user_id, registration_number")
           .eq("id", vehicleId)
-          .single();
+          .maybeSingle();
 
         if (vehicle) {
           await adminClient.from("vehicle_history").insert({
@@ -417,33 +466,21 @@ Deno.serve(async (req) => {
           });
         }
 
-        responseData = { success: true, message: `Vehicle ${isVerified ? "verified" : "unverified"}` };
+        responseData = { message: `Vehicle ${isVerified ? "verified" : "unverified"}` };
         break;
       }
 
       case "get_vehicle_for_claim": {
-        const regNumber = body?.registrationNumber as string;
-
-        if (!regNumber) {
-          return new Response(
-            JSON.stringify({ error: "registrationNumber is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        const validation = GetVehicleForClaimSchema.safeParse(body);
+        if (!validation.success) {
+          return errorResponse(validation.error.errors[0]?.message || "Invalid input", 400, "VALIDATION_ERROR");
         }
 
-        const { data: vehicleData, error: vehicleError } = await adminClient
+        const { data: vehicleData } = await adminClient
           .from("vehicles")
           .select("id, user_id, registration_number, maker_model")
-          .eq("registration_number", regNumber.toUpperCase())
+          .eq("registration_number", validation.data.registrationNumber)
           .maybeSingle();
-
-        if (vehicleError) {
-          console.error("Vehicle lookup error:", vehicleError);
-          return new Response(
-            JSON.stringify({ found: false, error: "Lookup failed" }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
 
         if (!vehicleData) {
           responseData = { found: false };
@@ -459,131 +496,101 @@ Deno.serve(async (req) => {
       }
 
       case "claims": {
-        // Get all ownership claims
-        const { data: claimsData } = await adminClient
+        const { data: claimsData, count } = await adminClient
           .from("ownership_claims")
-          .select("*")
-          .order("created_at", { ascending: false });
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(offset, offset + pageSize - 1);
 
         const enrichedClaims = await Promise.all(
           (claimsData || []).map(async (c) => {
-            const { data: claimantData } = await adminClient.auth.admin.getUserById(c.claimant_id);
-            const { data: ownerData } = await adminClient.auth.admin.getUserById(c.current_owner_id);
-            const { data: vehicleData } = await adminClient
-              .from("vehicles")
-              .select("maker_model")
-              .eq("id", c.vehicle_id)
-              .maybeSingle();
-
+            const [claimantResult, ownerResult, vehicleResult] = await Promise.all([
+              adminClient.auth.admin.getUserById(c.claimant_id),
+              adminClient.auth.admin.getUserById(c.current_owner_id),
+              adminClient.from("vehicles").select("maker_model").eq("id", c.vehicle_id).maybeSingle(),
+            ]);
             return {
               ...c,
-              claimantEmail: claimantData?.user?.email || c.claimant_email,
-              ownerEmail: ownerData?.user?.email || "Unknown",
-              makerModel: vehicleData?.maker_model || null,
+              claimantEmail: claimantResult.data?.user?.email || c.claimant_email,
+              ownerEmail: ownerResult.data?.user?.email || "Unknown",
+              makerModel: vehicleResult.data?.maker_model || null,
             };
           })
         );
 
-        responseData = { claims: enrichedClaims };
+        responseData = { 
+          claims: enrichedClaims,
+          pagination: { page, pageSize, totalCount: count || 0, totalPages: Math.ceil((count || 0) / pageSize) }
+        };
         break;
       }
 
       case "update_claim_status": {
-        const claimId = body?.claimId as string;
-        const newStatus = body?.status as string;
-
-        if (!claimId || !newStatus) {
-          return new Response(
-            JSON.stringify({ error: "claimId and status are required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        if (!["resolved", "rejected", "expired"].includes(newStatus)) {
-          return new Response(
-            JSON.stringify({ error: "Invalid status value" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        const validation = UpdateClaimStatusSchema.safeParse(body);
+        if (!validation.success) {
+          return errorResponse(validation.error.errors[0]?.message || "Invalid input", 400, "VALIDATION_ERROR");
         }
 
         const { error: updateError } = await adminClient
           .from("ownership_claims")
-          .update({ status: newStatus })
-          .eq("id", claimId);
+          .update({ status: validation.data.status })
+          .eq("id", validation.data.claimId);
 
         if (updateError) {
-          console.error("Claim update error:", updateError);
-          return new Response(
-            JSON.stringify({ error: "Failed to update claim status" }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          console.error(`[${requestId}] Claim update error:`, updateError);
+          return errorResponse("Failed to update claim status", 500, "UPDATE_FAILED");
         }
 
-        responseData = { success: true, message: `Claim marked as ${newStatus}` };
+        responseData = { message: `Claim marked as ${validation.data.status}` };
         break;
       }
 
       case "listings": {
-        // Get all vehicle listings
-        const { data: listingsData } = await adminClient
+        const { data: listingsData, count } = await adminClient
           .from("vehicle_listings")
-          .select("*")
-          .order("created_at", { ascending: false });
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(offset, offset + pageSize - 1);
 
         const enrichedListings = await Promise.all(
-          (listingsData || []).map(async (l: any) => {
-            const { data: userData } = await adminClient.auth.admin.getUserById(l.user_id);
-            const { data: vehicleData } = await adminClient
-              .from("vehicles")
-              .select("registration_number, maker_model, manufacturer")
-              .eq("id", l.vehicle_id)
-              .maybeSingle();
-
+          (listingsData || []).map(async (l: Record<string, unknown>) => {
+            const [userResult, vehicleResult] = await Promise.all([
+              adminClient.auth.admin.getUserById(l.user_id as string),
+              adminClient.from("vehicles").select("registration_number, maker_model, manufacturer").eq("id", l.vehicle_id as string).maybeSingle(),
+            ]);
             return {
               ...l,
-              userEmail: userData?.user?.email || "Unknown",
-              registrationNumber: vehicleData?.registration_number || "Deleted",
-              makerModel: vehicleData?.maker_model || null,
-              manufacturer: vehicleData?.manufacturer || null,
+              userEmail: userResult.data?.user?.email || "Unknown",
+              registrationNumber: vehicleResult.data?.registration_number || "Deleted",
+              makerModel: vehicleResult.data?.maker_model || null,
+              manufacturer: vehicleResult.data?.manufacturer || null,
             };
           })
         );
 
-        responseData = { listings: enrichedListings };
+        responseData = { 
+          listings: enrichedListings,
+          pagination: { page, pageSize, totalCount: count || 0, totalPages: Math.ceil((count || 0) / pageSize) }
+        };
         break;
       }
 
       case "update_listing_status": {
-        const listingId = body?.listingId as string;
-        const newStatus = body?.status as string;
-        const adminNotes = body?.adminNotes as string | null;
-
-        if (!listingId || !newStatus) {
-          return new Response(
-            JSON.stringify({ error: "listingId and status are required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        const validation = UpdateListingStatusSchema.safeParse(body);
+        if (!validation.success) {
+          return errorResponse(validation.error.errors[0]?.message || "Invalid input", 400, "VALIDATION_ERROR");
         }
 
-        if (!["approved", "rejected", "on_hold"].includes(newStatus)) {
-          return new Response(
-            JSON.stringify({ error: "Invalid status value" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+        const { listingId, status: newStatus, adminNotes } = validation.data;
 
-        // Get listing info for logging
         const { data: listingData } = await adminClient
           .from("vehicle_listings")
           .select("vehicle_id, user_id, expected_price")
           .eq("id", listingId)
-          .single();
+          .maybeSingle();
 
         if (!listingData) {
-          return new Response(
-            JSON.stringify({ error: "Listing not found" }),
-            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          return errorResponse("Listing not found", 404, "NOT_FOUND");
         }
 
         const { error: updateError } = await adminClient
@@ -597,11 +604,8 @@ Deno.serve(async (req) => {
           .eq("id", listingId);
 
         if (updateError) {
-          console.error("Listing update error:", updateError);
-          return new Response(
-            JSON.stringify({ error: "Failed to update listing status" }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          console.error(`[${requestId}] Listing update error:`, updateError);
+          return errorResponse("Failed to update listing status", 500, "UPDATE_FAILED");
         }
 
         // Log to vehicle history
@@ -613,33 +617,25 @@ Deno.serve(async (req) => {
           user_id: listingData.user_id,
           event_type: eventType,
           event_description: `Listing ${newStatus} by admin`,
-          metadata: {
-            admin_email: userEmail,
-            admin_notes: adminNotes,
-            expected_price: listingData.expected_price,
-          },
+          metadata: { admin_email: userEmail, admin_notes: adminNotes, expected_price: listingData.expected_price },
         });
 
-        responseData = { success: true, message: `Listing marked as ${newStatus}` };
+        responseData = { message: `Listing marked as ${newStatus}` };
         break;
       }
 
       default:
-        return new Response(
-          JSON.stringify({ error: "Invalid type parameter" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return errorResponse(`Unknown action type: ${dataType}`, 400, "UNKNOWN_ACTION");
     }
-    return new Response(
-      JSON.stringify(responseData),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+
+    const duration = Date.now() - startTime;
+    console.log(`[${requestId}] ${dataType} completed in ${duration}ms for ${userEmail}`);
+    
+    return successResponse(responseData);
   } catch (error: unknown) {
-    console.error("Admin data error:", error);
+    const duration = Date.now() - startTime;
+    console.error(`[${requestId}] Admin data error after ${duration}ms:`, error);
     const message = error instanceof Error ? error.message : "Internal server error";
-    return new Response(
-      JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return errorResponse(message, 500, "INTERNAL_ERROR");
   }
 });

@@ -1,73 +1,112 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
+// Standardized CORS headers
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Request validation schema
+const RequestSchema = z.object({
+  vehicleId: z.string().uuid("Invalid vehicle ID format"),
+});
+
+// Standardized error response
+function errorResponse(message: string, status: number, errorCode: string, details?: object) {
+  return new Response(
+    JSON.stringify({ success: false, error: message, errorCode, ...details }),
+    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+// AI request timeout (30 seconds)
+const AI_TIMEOUT_MS = 30000;
+
 Deno.serve(async (req) => {
+  const requestId = crypto.randomUUID();
+  const startTime = Date.now();
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // ============= PHASE 1: AUTHENTICATION =============
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return errorResponse("Unauthorized", 401, "AUTH_MISSING");
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
+    // Validate environment variables
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error(`[${requestId}] Missing Supabase configuration`);
+      return errorResponse("Server configuration error", 500, "CONFIG_ERROR");
+    }
+
+    if (!lovableApiKey) {
+      console.error(`[${requestId}] LOVABLE_API_KEY not configured`);
+      return errorResponse("AI service not configured", 500, "CONFIG_ERROR");
+    }
 
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
     // Verify the user
-    const { data: { user }, error: userError } = await userClient.auth.getUser();
-    if (userError || !user) {
-      console.error("Auth error:", userError);
-      return new Response(
-        JSON.stringify({ error: "Invalid token" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims?.sub) {
+      console.log(`[${requestId}] Invalid token:`, claimsError?.message);
+      return errorResponse("Invalid token", 401, "AUTH_INVALID");
     }
 
-    const body = await req.json();
-    const { vehicleId } = body;
+    const userId = claimsData.claims.sub as string;
+    console.log(`[${requestId}] Authenticated user: ${userId}`);
 
-    if (!vehicleId) {
-      return new Response(
-        JSON.stringify({ error: "vehicleId is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // ============= PHASE 2: VALIDATE INPUT =============
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return errorResponse("Invalid JSON body", 400, "INVALID_JSON");
     }
 
-    // Fetch vehicle data and verify ownership + verification status
+    const validation = RequestSchema.safeParse(rawBody);
+    if (!validation.success) {
+      const errorMessage = validation.error.errors[0]?.message || "Invalid input";
+      return errorResponse(errorMessage, 400, "VALIDATION_ERROR");
+    }
+
+    const { vehicleId } = validation.data;
+
+    // ============= PHASE 3: FETCH VEHICLE & VERIFY OWNERSHIP =============
     const { data: vehicle, error: vehicleError } = await userClient
       .from("vehicles")
       .select("*")
       .eq("id", vehicleId)
-      .single();
+      .maybeSingle();
 
-    if (vehicleError || !vehicle) {
-      console.error("Vehicle fetch error:", vehicleError);
-      return new Response(
-        JSON.stringify({ error: "Vehicle not found or access denied" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (vehicleError) {
+      console.error(`[${requestId}] Vehicle fetch error:`, vehicleError);
+      return errorResponse("Vehicle not found or access denied", 404, "NOT_FOUND");
     }
 
-    // Check full verification status (all required fields)
-    const requiredIdentityFields = ['registration_number', 'owner_name', 'manufacturer', 'maker_model', 'registration_date'];
-    const requiredTechnicalFields = ['chassis_number', 'engine_number', 'fuel_type', 'color', 'seating_capacity', 'cubic_capacity', 'vehicle_class'];
-    const requiredOwnershipFields = ['owner_count', 'rc_status'];
+    if (!vehicle) {
+      return errorResponse("Vehicle not found or access denied", 404, "NOT_FOUND");
+    }
 
-    const hasValue = (val: any) => val !== null && val !== undefined && val !== '';
+    // ============= PHASE 4: VERIFY VEHICLE IS FULLY VERIFIED =============
+    const requiredIdentityFields = ["registration_number", "owner_name", "manufacturer", "maker_model", "registration_date"];
+    const requiredTechnicalFields = ["chassis_number", "engine_number", "fuel_type", "color", "seating_capacity", "cubic_capacity", "vehicle_class"];
+    const requiredOwnershipFields = ["owner_count", "rc_status"];
+
+    const hasValue = (val: unknown) => val !== null && val !== undefined && val !== "";
     
     const identityCount = requiredIdentityFields.filter(f => hasValue(vehicle[f])).length;
     const technicalCount = requiredTechnicalFields.filter(f => hasValue(vehicle[f])).length;
@@ -81,21 +120,20 @@ Deno.serve(async (req) => {
 
     if (!isFullyVerified) {
       const missingSteps = [];
-      if (!vehicle.is_verified) missingSteps.push('Photo Verification');
+      if (!vehicle.is_verified) missingSteps.push("Photo Verification");
       if (identityCount < 4) missingSteps.push(`Vehicle Identity (${identityCount}/4 fields)`);
       if (technicalCount < 5) missingSteps.push(`Technical Specs (${technicalCount}/5 fields)`);
       if (ownershipCount < 2) missingSteps.push(`Ownership Details (${ownershipCount}/2 fields)`);
 
-      return new Response(
-        JSON.stringify({ 
-          error: "Vehicle must be 100% verified before listing for sale",
-          missingSteps 
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      return errorResponse(
+        "Vehicle must be 100% verified before listing for sale",
+        400,
+        "INCOMPLETE_VERIFICATION",
+        { missingSteps }
       );
     }
 
-    // Calculate vehicle age
+    // ============= PHASE 5: CALCULATE VEHICLE AGE =============
     let vehicleAge = "Unknown";
     if (vehicle.registration_date) {
       const regDate = new Date(vehicle.registration_date);
@@ -105,7 +143,7 @@ Deno.serve(async (req) => {
       vehicleAge = `${years} years ${months} months`;
     }
 
-    // Build prompt for AI
+    // ============= PHASE 6: CALL AI FOR PRICE ESTIMATION =============
     const vehicleDetails = `
 Vehicle Details for Price Estimation:
 - Registration Number: ${vehicle.registration_number}
@@ -157,108 +195,111 @@ Response format:
   "factors": ["list of key factors affecting this valuation"]
 }`;
 
-    console.log("Calling Lovable AI for price estimation...");
+    console.log(`[${requestId}] Calling AI for price estimation...`);
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${lovableApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: vehicleDetails },
-        ],
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error("AI API error:", aiResponse.status, errorText);
-      
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI service quota exceeded." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      return new Response(
-        JSON.stringify({ error: "Failed to get price estimate from AI" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const aiData = await aiResponse.json();
-    const content = aiData.choices?.[0]?.message?.content;
-
-    if (!content) {
-      console.error("No content in AI response:", aiData);
-      return new Response(
-        JSON.stringify({ error: "Invalid AI response" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Parse the JSON response
-    let priceEstimate;
     try {
-      // Clean up potential markdown formatting
-      let cleanContent = content.trim();
-      if (cleanContent.startsWith("```json")) {
-        cleanContent = cleanContent.slice(7);
+      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lovableApiKey}`,
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: vehicleDetails },
+          ],
+        }),
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!aiResponse.ok) {
+        const errorText = await aiResponse.text();
+        console.error(`[${requestId}] AI API error:`, aiResponse.status, errorText);
+        
+        if (aiResponse.status === 429) {
+          return errorResponse("Rate limit exceeded. Please try again later.", 429, "RATE_LIMIT");
+        }
+        if (aiResponse.status === 402) {
+          return errorResponse("AI service quota exceeded.", 402, "QUOTA_EXCEEDED");
+        }
+        
+        return errorResponse("Failed to get price estimate from AI", 500, "AI_ERROR");
       }
-      if (cleanContent.startsWith("```")) {
-        cleanContent = cleanContent.slice(3);
+
+      const aiData = await aiResponse.json();
+      const content = aiData.choices?.[0]?.message?.content;
+
+      if (!content) {
+        console.error(`[${requestId}] No content in AI response:`, aiData);
+        return errorResponse("Invalid AI response", 500, "AI_ERROR");
       }
-      if (cleanContent.endsWith("```")) {
-        cleanContent = cleanContent.slice(0, -3);
+
+      // Parse the JSON response
+      let priceEstimate;
+      try {
+        let cleanContent = content.trim();
+        if (cleanContent.startsWith("```json")) {
+          cleanContent = cleanContent.slice(7);
+        }
+        if (cleanContent.startsWith("```")) {
+          cleanContent = cleanContent.slice(3);
+        }
+        if (cleanContent.endsWith("```")) {
+          cleanContent = cleanContent.slice(0, -3);
+        }
+        cleanContent = cleanContent.trim();
+        
+        priceEstimate = JSON.parse(cleanContent);
+      } catch (parseError) {
+        console.error(`[${requestId}] Failed to parse AI response:`, content, parseError);
+        return errorResponse("Failed to parse price estimate", 500, "PARSE_ERROR");
       }
-      cleanContent = cleanContent.trim();
-      
-      priceEstimate = JSON.parse(cleanContent);
-    } catch (parseError) {
-      console.error("Failed to parse AI response:", content, parseError);
+
+      const duration = Date.now() - startTime;
+      console.log(`[${requestId}] Price estimate generated in ${duration}ms:`, priceEstimate);
+
       return new Response(
-        JSON.stringify({ error: "Failed to parse price estimate" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          success: true,
+          estimate: {
+            low: priceEstimate.estimated_price_low,
+            high: priceEstimate.estimated_price_high,
+            recommended: priceEstimate.recommended_price,
+            confidence: priceEstimate.confidence,
+            factors: priceEstimate.factors,
+          },
+          vehicleInfo: {
+            registrationNumber: vehicle.registration_number,
+            manufacturer: vehicle.manufacturer,
+            model: vehicle.maker_model,
+            age: vehicleAge,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError instanceof Error && fetchError.name === "AbortError") {
+        console.error(`[${requestId}] AI request timed out after ${AI_TIMEOUT_MS}ms`);
+        return errorResponse("AI request timed out. Please try again.", 504, "TIMEOUT");
+      }
+      throw fetchError;
     }
-
-    console.log("Price estimate generated:", priceEstimate);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        estimate: {
-          low: priceEstimate.estimated_price_low,
-          high: priceEstimate.estimated_price_high,
-          recommended: priceEstimate.recommended_price,
-          confidence: priceEstimate.confidence,
-          factors: priceEstimate.factors,
-        },
-        vehicleInfo: {
-          registrationNumber: vehicle.registration_number,
-          manufacturer: vehicle.manufacturer,
-          model: vehicle.maker_model,
-          age: vehicleAge,
-        },
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   } catch (error) {
-    console.error("Price estimation error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    const duration = Date.now() - startTime;
+    console.error(`[${requestId}] Price estimation error after ${duration}ms:`, error);
+    return errorResponse(
+      error instanceof Error ? error.message : "Internal server error",
+      500,
+      "INTERNAL_ERROR"
     );
   }
 });

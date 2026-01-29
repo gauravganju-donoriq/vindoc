@@ -1,54 +1,77 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
-
+// Standardized CORS headers
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-interface TransferNotificationRequest {
-  recipientEmail: string;
-  senderName: string;
-  vehicleNumber: string;
-  vehicleModel: string | null;
-  expiresAt: string;
+// Request validation schema
+const RequestSchema = z.object({
+  recipientEmail: z.string().email("Invalid email format"),
+  senderName: z.string().min(1).max(100),
+  vehicleNumber: z.string().min(1).max(20).transform(s => s.trim().toUpperCase()),
+  vehicleModel: z.string().max(100).optional().nullable(),
+  expiresAt: z.string().refine(val => !isNaN(Date.parse(val)), "Invalid date format"),
+});
+
+// Standardized error response
+function errorResponse(message: string, status: number, errorCode: string) {
+  return new Response(
+    JSON.stringify({ success: false, message, errorCode }),
+    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
 }
 
 serve(async (req) => {
+  const requestId = crypto.randomUUID();
+  const startTime = Date.now();
+
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { 
-      recipientEmail, 
-      senderName, 
-      vehicleNumber, 
-      vehicleModel,
-      expiresAt 
-    }: TransferNotificationRequest = await req.json();
-
-    console.log(`Sending transfer notification to: ${recipientEmail}`);
-
-    // Validate required fields
-    if (!recipientEmail || !senderName || !vehicleNumber) {
-      return new Response(
-        JSON.stringify({ success: false, message: "Missing required fields" }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // ============= PHASE 1: VALIDATE ENVIRONMENT =============
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    
+    if (!resendApiKey) {
+      console.error(`[${requestId}] RESEND_API_KEY not configured`);
+      return errorResponse("Email service not configured", 500, "CONFIG_ERROR");
     }
 
-    const expiryDate = new Date(expiresAt).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
+    const resend = new Resend(resendApiKey);
+
+    // ============= PHASE 2: VALIDATE INPUT =============
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return errorResponse("Invalid JSON body", 400, "INVALID_JSON");
+    }
+
+    const validation = RequestSchema.safeParse(rawBody);
+    if (!validation.success) {
+      const errorMessage = validation.error.errors[0]?.message || "Invalid input";
+      return errorResponse(errorMessage, 400, "VALIDATION_ERROR");
+    }
+
+    const { recipientEmail, senderName, vehicleNumber, vehicleModel, expiresAt } = validation.data;
+
+    console.log(`[${requestId}] Sending transfer notification to: ${recipientEmail}`);
+
+    // ============= PHASE 3: FORMAT AND SEND EMAIL =============
+    const expiryDate = new Date(expiresAt).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "long",
+      year: "numeric"
     });
 
     const emailResponse = await resend.emails.send({
-      from: "Vehicle Manager <onboarding@resend.dev>",
+      from: "VinDoc <onboarding@resend.dev>",
       to: [recipientEmail],
       subject: `Vehicle Transfer Request: ${vehicleNumber}`,
       html: `
@@ -78,7 +101,7 @@ serve(async (req) => {
                 </p>
                 ${vehicleModel ? `<p style="color: #71717a; font-size: 14px; margin: 0;">
                   <strong>Model:</strong> <span style="color: #18181b;">${vehicleModel}</span>
-                </p>` : ''}
+                </p>` : ""}
               </div>
               
               <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 0 8px 8px 0; margin-bottom: 24px;">
@@ -88,7 +111,7 @@ serve(async (req) => {
               </div>
               
               <p style="color: #18181b; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-                To accept or reject this transfer, please log in to your Vehicle Manager account and go to your dashboard.
+                To accept or reject this transfer, please log in to your VinDoc account and go to your dashboard.
               </p>
               
               <p style="color: #71717a; font-size: 14px; margin: 0;">
@@ -97,7 +120,7 @@ serve(async (req) => {
             </div>
             <div style="background-color: #f4f4f5; padding: 16px; text-align: center;">
               <p style="color: #71717a; font-size: 12px; margin: 0;">
-                This email was sent by Vehicle Manager. If you didn't expect this email, you can safely ignore it.
+                This email was sent by VinDoc. If you didn't expect this email, you can safely ignore it.
               </p>
             </div>
           </div>
@@ -106,18 +129,20 @@ serve(async (req) => {
       `,
     });
 
-    console.log("Transfer notification email sent:", emailResponse);
+    const duration = Date.now() - startTime;
+    console.log(`[${requestId}] Transfer notification email sent in ${duration}ms:`, emailResponse);
 
     return new Response(
       JSON.stringify({ success: true, data: emailResponse }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-
-  } catch (error: any) {
-    console.error("Error sending transfer notification:", error);
-    return new Response(
-      JSON.stringify({ success: false, message: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  } catch (error: unknown) {
+    const duration = Date.now() - startTime;
+    console.error(`[${requestId}] Error sending transfer notification after ${duration}ms:`, error);
+    return errorResponse(
+      error instanceof Error ? error.message : "Unknown error",
+      500,
+      "INTERNAL_ERROR"
     );
   }
 });
