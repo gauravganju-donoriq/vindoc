@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -7,11 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  ArrowLeft, Upload, FileText, Trash2, Download, 
-  AlertTriangle, CheckCircle, Clock, Car, Calendar, Shield,
-  Settings, User, Fuel, Palette, Users, Banknote, Hash,
-  Gauge, Weight, FileCheck, RefreshCw, Loader2, Pencil, Save, X, Sparkles,
-  LayoutGrid, FileStack, Wrench, History, IndianRupee
+  Upload, FileText, Trash2, Download, 
+  AlertTriangle, CheckCircle, Clock, Car, Calendar,
+  User, Fuel, Palette, Users, Banknote, Hash,
+  Gauge, FileCheck, RefreshCw, Loader2, Pencil, Save, X, Sparkles,
+  Settings, ChevronLeft, Shield, ChevronRight, Info
 } from "lucide-react";
 import { format, differenceInDays, isPast, formatDistanceToNow } from "date-fns";
 import {
@@ -103,12 +104,77 @@ const getExpiryStatus = (expiryDate: string | null) => {
   const daysLeft = differenceInDays(date, new Date());
   
   if (isPast(date)) {
-    return { status: "expired", label: "Expired", variant: "destructive" as const, icon: AlertTriangle, color: "text-destructive" };
+    return { status: "expired", label: "Expired", variant: "destructive" as const, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50" };
   } else if (daysLeft <= 30) {
-    return { status: "expiring", label: `${daysLeft} days left`, variant: "secondary" as const, icon: Clock, color: "text-amber-600" };
+    return { status: "expiring", label: `${daysLeft}d left`, variant: "secondary" as const, icon: Clock, color: "text-amber-600", bg: "bg-amber-50" };
   } else {
-    return { status: "valid", label: "Valid", variant: "default" as const, icon: CheckCircle, color: "text-green-600" };
+    return { status: "valid", label: "Valid", variant: "default" as const, icon: CheckCircle, color: "text-green-600", bg: "bg-green-50" };
   }
+};
+
+// Section Card Component
+const SectionCard = ({ 
+  title, 
+  icon: Icon, 
+  children,
+  className = "",
+  actions
+}: { 
+  title: string; 
+  icon: React.ComponentType<{ className?: string }>; 
+  children: React.ReactNode;
+  className?: string;
+  actions?: React.ReactNode;
+}) => (
+  <div className={`bg-white border border-gray-100 rounded-xl p-4 sm:p-6 ${className}`}>
+    <div className="flex items-center justify-between mb-4 sm:mb-6">
+      <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2">
+        <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
+        {title}
+      </h3>
+      {actions}
+    </div>
+    {children}
+  </div>
+);
+
+// Quick Status Card for Overview
+const QuickStatusCard = ({ 
+  label, 
+  date, 
+  onClick 
+}: { 
+  label: string; 
+  date: string | null; 
+  onClick?: () => void;
+}) => {
+  const status = getExpiryStatus(date);
+  
+  return (
+    <button
+      onClick={onClick}
+      className={`p-3 sm:p-4 rounded-xl border text-left transition-all hover:shadow-sm w-full ${
+        status?.status === "expired" 
+          ? "bg-red-50 border-red-100 hover:border-red-200" 
+          : status?.status === "expiring"
+          ? "bg-amber-50 border-amber-100 hover:border-amber-200"
+          : "bg-green-50 border-green-100 hover:border-green-200"
+      }`}
+    >
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs sm:text-sm font-medium text-gray-700">{label}</span>
+        {status && <status.icon className={`h-4 w-4 ${status.color}`} />}
+      </div>
+      <p className={`text-sm font-semibold ${status?.color || "text-gray-400"}`}>
+        {status ? status.label : "Not set"}
+      </p>
+      {date && (
+        <p className="text-xs text-gray-500 mt-1 hidden sm:block">
+          {format(new Date(date), "dd MMM yyyy")}
+        </p>
+      )}
+    </button>
+  );
 };
 
 const VehicleDetails = () => {
@@ -118,6 +184,7 @@ const VehicleDetails = () => {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [selectedDocType, setSelectedDocType] = useState("auto");
+  const [activeTab, setActiveTab] = useState("overview");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -225,7 +292,6 @@ const VehicleDetails = () => {
 
     setIsSaving(true);
     try {
-      // Convert numeric fields
       const updates = { ...pendingChanges };
       if ("seating_capacity" in updates && updates.seating_capacity !== null) {
         updates.seating_capacity = parseInt(updates.seating_capacity) || null;
@@ -244,7 +310,6 @@ const VehicleDetails = () => {
 
       if (error) throw error;
 
-      // Log the event
       const changedFields = Object.keys(pendingChanges);
       await logVehicleEvent({
         vehicleId: vehicle.id,
@@ -253,7 +318,6 @@ const VehicleDetails = () => {
         metadata: { changedFields, previousValues: changedFields.reduce((acc, f) => ({ ...acc, [f]: (vehicle as any)[f] }), {}) },
       });
 
-      // Refresh vehicle data
       await fetchVehicle();
 
       toast({
@@ -274,13 +338,12 @@ const VehicleDetails = () => {
     }
   };
 
-  // Cancel editing
   const handleCancelEdit = () => {
     setPendingChanges({});
     setIsEditing(false);
   };
 
-  // Preprocess image: resize and compress for AI analysis
+  // Preprocess image
   const preprocessImage = async (file: File): Promise<{ base64: string; mimeType: string }> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -288,11 +351,9 @@ const VehicleDetails = () => {
       const ctx = canvas.getContext("2d");
 
       img.onload = () => {
-        // Max dimension for AI processing
         const MAX_SIZE = 1536;
         let { width, height } = img;
 
-        // Resize if needed
         if (width > MAX_SIZE || height > MAX_SIZE) {
           if (width > height) {
             height = (height / width) * MAX_SIZE;
@@ -307,15 +368,12 @@ const VehicleDetails = () => {
         canvas.height = height;
         ctx?.drawImage(img, 0, 0, width, height);
 
-        // Convert to JPEG with 85% quality
         const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
         const base64 = dataUrl.split(",")[1];
         resolve({ base64, mimeType: "image/jpeg" });
       };
 
       img.onerror = () => reject(new Error("Failed to load image"));
-
-      // Create object URL from file
       img.src = URL.createObjectURL(file);
     });
   };
@@ -324,10 +382,7 @@ const VehicleDetails = () => {
   const analyzeDocumentWithAI = async (file: File) => {
     setIsAnalyzing(true);
     try {
-      // Preprocess image (resize and compress)
       const { base64, mimeType } = await preprocessImage(file);
-      
-      console.log(`Sending image for analysis: ${Math.round(base64.length * 0.75 / 1024)}KB`);
 
       const response = await supabase.functions.invoke("analyze-document", {
         body: {
@@ -341,38 +396,19 @@ const VehicleDetails = () => {
         },
       });
 
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
+      if (response.error) throw new Error(response.error.message);
 
       const data = response.data;
       if (!data.success) {
-        // Handle specific error types
         if (data.errorType === "rate_limit") {
-          toast({
-            title: "Please wait",
-            description: "Too many requests. Please try again in a moment.",
-            variant: "destructive",
-          });
-          return;
-        }
-        if (data.errorType === "image_too_large") {
-          toast({
-            title: "Image too large",
-            description: "Please upload a smaller image.",
-            variant: "destructive",
-          });
+          toast({ title: "Please wait", description: "Too many requests. Please try again in a moment.", variant: "destructive" });
           return;
         }
         throw new Error(data.error || "Analysis failed");
       }
 
       if (Object.keys(data.extractedFields).length === 0) {
-        toast({
-          title: "No data extracted",
-          description: "Could not extract any fields from this document. Try a clearer image.",
-          variant: "destructive",
-        });
+        toast({ title: "No data extracted", description: "Could not extract any fields from this document.", variant: "destructive" });
         return;
       }
 
@@ -383,12 +419,7 @@ const VehicleDetails = () => {
       });
       setShowAnalysisModal(true);
     } catch (error: any) {
-      console.error("AI analysis error:", error);
-      toast({
-        title: "Analysis failed",
-        description: error.message || "Could not analyze the document",
-        variant: "destructive",
-      });
+      toast({ title: "Analysis failed", description: error.message || "Could not analyze the document", variant: "destructive" });
     } finally {
       setIsAnalyzing(false);
     }
@@ -399,7 +430,6 @@ const VehicleDetails = () => {
     if (!vehicle) return;
 
     try {
-      // Convert numeric fields
       const updates = { ...selectedFields };
       if ("seating_capacity" in updates && updates.seating_capacity !== null) {
         updates.seating_capacity = parseInt(updates.seating_capacity) || null;
@@ -411,53 +441,29 @@ const VehicleDetails = () => {
         updates.owner_count = parseInt(updates.owner_count) || null;
       }
 
-      const { error } = await supabase
-        .from("vehicles")
-        .update(updates)
-        .eq("id", vehicle.id);
-
+      const { error } = await supabase.from("vehicles").update(updates).eq("id", vehicle.id);
       if (error) throw error;
 
-      // Update document type if we have a pending document and AI detected the type
       if (lastUploadedDocId && analysisResult?.documentType && analysisResult.documentType !== "auto") {
-        await supabase
-          .from("documents")
-          .update({ document_type: analysisResult.documentType })
-          .eq("id", lastUploadedDocId);
-        
+        await supabase.from("documents").update({ document_type: analysisResult.documentType }).eq("id", lastUploadedDocId);
         setLastUploadedDocId(null);
-        fetchDocuments(); // Refresh to show updated document type
+        fetchDocuments();
       }
 
-      // Log the event
       const changedFields = Object.keys(selectedFields);
       await logVehicleEvent({
         vehicleId: vehicle.id,
         eventType: "ai_extraction",
-        description: `AI extracted and applied ${changedFields.length} field(s) from ${analysisResult?.documentType || "document"}`,
-        metadata: { 
-          changedFields, 
-          extractedValues: selectedFields,
-          confidence: analysisResult?.confidence,
-          detectedDocumentType: analysisResult?.documentType
-        },
+        description: `AI extracted and applied ${changedFields.length} field(s)`,
+        metadata: { changedFields, extractedValues: selectedFields, confidence: analysisResult?.confidence },
       });
 
       await fetchVehicle();
-
-      toast({
-        title: "Fields updated",
-        description: `Applied ${changedFields.length} field(s) from document analysis.`,
-      });
-
+      toast({ title: "Fields updated", description: `Applied ${changedFields.length} field(s) from document analysis.` });
       setShowAnalysisModal(false);
       setAnalysisResult(null);
     } catch (error: any) {
-      toast({
-        title: "Error applying changes",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Error applying changes", description: error.message, variant: "destructive" });
     }
   };
 
@@ -467,31 +473,19 @@ const VehicleDetails = () => {
 
     const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload a PDF or image file (JPEG, PNG, WebP)",
-        variant: "destructive",
-      });
+      toast({ title: "Invalid file type", description: "Please upload a PDF or image file", variant: "destructive" });
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Maximum file size is 5MB",
-        variant: "destructive",
-      });
+      toast({ title: "File too large", description: "Maximum file size is 5MB", variant: "destructive" });
       return;
     }
 
-    // Store the file and show consent dialog
     setPendingUploadFile(file);
     setShowUploadConsent(true);
 
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const processFileUpload = async () => {
@@ -500,28 +494,19 @@ const VehicleDetails = () => {
     const file = pendingUploadFile;
     setShowUploadConsent(false);
 
-    // Start AI analysis for image files (not PDF)
     const isImage = file.type.startsWith("image/");
-    if (isImage) {
-      analyzeDocumentWithAI(file);
-    }
+    if (isImage) analyzeDocumentWithAI(file);
 
     setUploading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        navigate("/auth");
-        return;
-      }
+      if (!user) { navigate("/auth"); return; }
 
       const fileExt = file.name.split(".").pop();
       const fileName = `${Date.now()}-${selectedDocType}.${fileExt}`;
       const filePath = `${user.id}/${id}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("vehicle-documents")
-        .upload(filePath, file);
-
+      const { error: uploadError } = await supabase.storage.from("vehicle-documents").upload(filePath, file);
       if (uploadError) throw uploadError;
 
       const { data: insertedDoc, error: dbError } = await supabase.from("documents").insert({
@@ -535,10 +520,7 @@ const VehicleDetails = () => {
 
       if (dbError) throw dbError;
 
-      // Store the document ID for updating after AI detection
-      if (insertedDoc && selectedDocType === "auto") {
-        setLastUploadedDocId(insertedDoc.id);
-      }
+      if (insertedDoc && selectedDocType === "auto") setLastUploadedDocId(insertedDoc.id);
 
       await logVehicleEvent({
         vehicleId: id!,
@@ -547,18 +529,10 @@ const VehicleDetails = () => {
         metadata: { fileName: file.name, fileSize: file.size, documentType: selectedDocType },
       });
 
-      toast({
-        title: "Document uploaded",
-        description: `${file.name} has been uploaded successfully.`,
-      });
-
+      toast({ title: "Document uploaded", description: `${file.name} has been uploaded successfully.` });
       fetchDocuments();
     } catch (error: any) {
-      toast({
-        title: "Upload failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Upload failed", description: error.message, variant: "destructive" });
     } finally {
       setUploading(false);
       setPendingUploadFile(null);
@@ -567,10 +541,7 @@ const VehicleDetails = () => {
 
   const handleDownload = async (doc: Document) => {
     try {
-      const { data, error } = await supabase.storage
-        .from("vehicle-documents")
-        .download(doc.file_path);
-
+      const { data, error } = await supabase.storage.from("vehicle-documents").download(doc.file_path);
       if (error) throw error;
 
       const url = URL.createObjectURL(data);
@@ -580,82 +551,42 @@ const VehicleDetails = () => {
       a.click();
       URL.revokeObjectURL(url);
     } catch (error: any) {
-      toast({
-        title: "Download failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Download failed", description: error.message, variant: "destructive" });
     }
   };
 
-  // Re-analyze an existing document with AI
   const handleReanalyzeDocument = async (doc: Document) => {
-    // Only allow image files
     const isImage = doc.file_path.match(/\.(jpg|jpeg|png|webp)$/i);
     if (!isImage) {
-      toast({
-        title: "Not supported",
-        description: "AI scanning is only available for image documents (JPG, PNG, WebP).",
-        variant: "destructive",
-      });
+      toast({ title: "Not supported", description: "AI scanning is only available for image documents.", variant: "destructive" });
       return;
     }
 
     setIsAnalyzing(true);
     try {
-      // Download the file from storage
-      const { data: fileBlob, error } = await supabase.storage
-        .from("vehicle-documents")
-        .download(doc.file_path);
-
+      const { data: fileBlob, error } = await supabase.storage.from("vehicle-documents").download(doc.file_path);
       if (error) throw error;
 
-      // Convert blob to File
       const file = new File([fileBlob], doc.document_name, { type: fileBlob.type || "image/jpeg" });
-      
-      // Set the document type for context
       setSelectedDocType(doc.document_type);
-      
-      // Preprocess and analyze
       const { base64, mimeType } = await preprocessImage(file);
-      
-      console.log(`Re-analyzing document: ${Math.round(base64.length * 0.75 / 1024)}KB`);
 
       const response = await supabase.functions.invoke("analyze-document", {
         body: {
           documentBase64: base64,
           documentType: doc.document_type,
           mimeType: mimeType,
-          vehicleContext: {
-            registration_number: vehicle?.registration_number,
-            current_values: vehicle,
-          },
+          vehicleContext: { registration_number: vehicle?.registration_number, current_values: vehicle },
         },
       });
 
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
+      if (response.error) throw new Error(response.error.message);
 
       const data = response.data;
-      if (!data.success) {
-        if (data.errorType === "rate_limit") {
-          toast({
-            title: "Please wait",
-            description: "Too many requests. Please try again in a moment.",
-            variant: "destructive",
-          });
-          return;
-        }
-        throw new Error(data.error || "Analysis failed");
-      }
+      if (!data.success) throw new Error(data.error || "Analysis failed");
 
       if (Object.keys(data.extractedFields).length === 0) {
-        toast({
-          title: "No data extracted",
-          description: "Could not extract any fields from this document. Try a clearer image.",
-          variant: "destructive",
-        });
+        toast({ title: "No data extracted", description: "Could not extract any fields.", variant: "destructive" });
         return;
       }
 
@@ -666,12 +597,7 @@ const VehicleDetails = () => {
       });
       setShowAnalysisModal(true);
     } catch (error: any) {
-      console.error("AI re-analysis error:", error);
-      toast({
-        title: "Analysis failed",
-        description: error.message || "Could not analyze the document",
-        variant: "destructive",
-      });
+      toast({ title: "Analysis failed", description: error.message, variant: "destructive" });
     } finally {
       setIsAnalyzing(false);
     }
@@ -679,18 +605,8 @@ const VehicleDetails = () => {
 
   const handleDeleteDocument = async (doc: Document) => {
     try {
-      const { error: storageError } = await supabase.storage
-        .from("vehicle-documents")
-        .remove([doc.file_path]);
-
-      if (storageError) throw storageError;
-
-      const { error: dbError } = await supabase
-        .from("documents")
-        .delete()
-        .eq("id", doc.id);
-
-      if (dbError) throw dbError;
+      await supabase.storage.from("vehicle-documents").remove([doc.file_path]);
+      await supabase.from("documents").delete().eq("id", doc.id);
 
       await logVehicleEvent({
         vehicleId: id!,
@@ -700,572 +616,366 @@ const VehicleDetails = () => {
       });
 
       setDocuments(documents.filter((d) => d.id !== doc.id));
-      toast({
-        title: "Document deleted",
-        description: "The document has been removed.",
-      });
+      toast({ title: "Document deleted", description: "The document has been removed." });
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to delete document",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to delete document", variant: "destructive" });
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      <div className="min-h-screen bg-gray-50">
+        <div className="sticky top-0 z-50 bg-white border-b border-gray-100">
+          <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 h-16 flex items-center">
+            <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
+          </div>
+        </div>
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-6 sm:py-8">
+          <div className="h-32 bg-white border border-gray-100 rounded-xl animate-pulse mb-6" />
+          <div className="h-64 bg-white border border-gray-100 rounded-xl animate-pulse" />
+        </div>
       </div>
     );
   }
 
   if (!vehicle) return null;
 
-  const registrationYear = vehicle.registration_date 
-    ? new Date(vehicle.registration_date).getFullYear() 
-    : null;
-
-  const expiryItems = [
-    { label: "Insurance", date: vehicle.insurance_expiry, company: vehicle.insurance_company, fieldName: "insurance_expiry" },
-    { label: "PUCC Certificate", date: vehicle.pucc_valid_upto, fieldName: "pucc_valid_upto" },
-    { label: "Fitness Certificate", date: vehicle.fitness_valid_upto, fieldName: "fitness_valid_upto" },
-    { label: "Road Tax", date: vehicle.road_tax_valid_upto, fieldName: "road_tax_valid_upto" },
-  ];
-
+  const registrationYear = vehicle.registration_date ? new Date(vehicle.registration_date).getFullYear() : null;
   const timeUntilRefresh = getTimeUntilRefresh();
   const hasChanges = Object.keys(pendingChanges).length > 0;
+  const verificationProgress = calculateVerificationProgress(vehicle, documents);
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="border-b bg-background">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
-              <Shield className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <h1 className="text-lg font-semibold">VinDoc</h1>
+      <motion.header
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.3 }}
+        className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100"
+      >
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 h-16 flex items-center justify-between">
+          <Link to="/dashboard" className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors group">
+            <ChevronLeft className="h-5 w-5 group-hover:-translate-x-0.5 transition-transform" />
+            <span className="text-sm font-medium hidden sm:inline">Back to Dashboard</span>
+          </Link>
+          
+          {/* Quick Actions in Header */}
+          <div className="flex items-center gap-2">
+            <TransferVehicleDialog
+              vehicleId={vehicle.id}
+              vehicleNumber={vehicle.registration_number}
+              vehicleModel={vehicle.maker_model || vehicle.manufacturer}
+              onTransferInitiated={fetchVehicle}
+            />
+            <Button
+              variant={canRefresh ? "default" : "outline"}
+              size="sm"
+              onClick={refreshVehicleData}
+              disabled={!canRefresh || isRefreshing}
+            >
+              {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            </Button>
           </div>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/dashboard">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Dashboard
-            </Link>
-          </Button>
         </div>
-      </header>
+      </motion.header>
 
-      <main className="container mx-auto px-4 py-6 max-w-6xl">
-        {/* Verification Progress - Global, always visible */}
-        <VerificationProgress 
-          progress={calculateVerificationProgress(vehicle, documents)} 
-          variant="card"
-        />
-
-        {/* Vehicle Hero Section */}
-        <div className="bg-background border border-border rounded-lg p-6 mb-6">
-          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+      <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-6 sm:py-8">
+        {/* Vehicle Hero */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white border border-gray-100 rounded-xl p-6 mb-8"
+        >
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             {/* Left: Vehicle Info */}
-            <div className="flex items-start gap-4">
+            <div className="flex items-center gap-4">
               {vehicle.verification_photo_path ? (
-                <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-border flex-shrink-0">
+                <div className="relative w-14 h-14 rounded-xl overflow-hidden border border-gray-100 flex-shrink-0">
                   <VehicleProfileImage filePath={vehicle.verification_photo_path} />
                 </div>
               ) : (
-                <div className="w-20 h-20 bg-muted rounded-lg flex items-center justify-center flex-shrink-0 border border-border">
-                  <Car className="h-8 w-8 text-muted-foreground" />
+                <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Car className="h-6 w-6 text-gray-400" />
                 </div>
               )}
               <div className="min-w-0">
-                <div className="flex items-center gap-3 mb-1 flex-wrap">
-                  <h2 className="text-2xl font-mono font-semibold">{vehicle.registration_number}</h2>
-                  {vehicle.rc_status && (
-                    <Badge variant={vehicle.rc_status === "ACTIVE" ? "default" : "destructive"}>
-                      {vehicle.rc_status}
-                    </Badge>
-                  )}
-                  {vehicle.is_verified && (
-                    <Badge variant="outline" className="text-green-600 border-green-600">
+                <div className="flex items-center gap-3 mb-0.5 flex-wrap">
+                  <h2 className="text-xl font-mono font-semibold text-gray-900">{vehicle.registration_number}</h2>
+                  {vehicle.is_verified ? (
+                    <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 text-xs">
                       <CheckCircle className="h-3 w-3 mr-1" />
                       Verified
                     </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 text-xs">
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      Not Verified
+                    </Badge>
                   )}
                 </div>
-                <p className="text-muted-foreground">
+                <p className="text-gray-500 text-sm">
                   {vehicle.manufacturer && <span>{toTitleCase(vehicle.manufacturer)}</span>}
-                  {vehicle.maker_model && vehicle.manufacturer && " • "}
+                  {vehicle.maker_model && vehicle.manufacturer && " · "}
                   {vehicle.maker_model && <span>{toTitleCase(vehicle.maker_model)}</span>}
-                  {!vehicle.manufacturer && !vehicle.maker_model && "Vehicle Details"}
+                  {vehicle.fuel_type && <span className="text-gray-400"> · {toTitleCase(vehicle.fuel_type)}</span>}
+                  {registrationYear && <span className="text-gray-400"> · {registrationYear}</span>}
                 </p>
-                {/* Quick Stats */}
-                <div className="flex flex-wrap gap-4 mt-3 text-sm">
-                  {vehicle.fuel_type && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Fuel className="h-4 w-4" />
-                      <span>{toTitleCase(vehicle.fuel_type)}</span>
-                    </div>
-                  )}
-                  {registrationYear && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      <span>{registrationYear}</span>
-                    </div>
-                  )}
-                  {vehicle.owner_count !== null && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Users className="h-4 w-4" />
-                      <span>{vehicle.owner_count === 1 ? "1st Owner" : `${vehicle.owner_count} Owners`}</span>
-                    </div>
-                  )}
-                  {vehicle.color && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Palette className="h-4 w-4" />
-                      <span>{toTitleCase(vehicle.color)}</span>
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
 
-            {/* Right: Actions */}
-            <div className="flex flex-col items-end gap-2 flex-shrink-0">
-              <div className="flex flex-wrap gap-2 justify-end">
-                {isEditing ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCancelEdit}
-                      disabled={isSaving}
-                    >
-                      <X className="h-4 w-4 mr-2" />
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSaveChanges}
-                      disabled={isSaving || !hasChanges}
-                    >
-                      {isSaving ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="h-4 w-4 mr-2" />
-                          Save Changes
-                        </>
-                      )}
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsEditing(true)}
-                    >
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Edit
-                    </Button>
-                    <TransferVehicleDialog
-                      vehicleId={vehicle.id}
-                      vehicleNumber={vehicle.registration_number}
-                      vehicleModel={vehicle.maker_model || vehicle.manufacturer}
-                      onTransferInitiated={fetchVehicle}
-                    />
-                    <Button
-                      variant={canRefresh ? "default" : "outline"}
-                      size="sm"
-                      onClick={refreshVehicleData}
-                      disabled={!canRefresh || isRefreshing}
-                    >
-                      {isRefreshing ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Refreshing...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Refresh
-                        </>
-                      )}
-                    </Button>
-                  </>
-                )}
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {isEditing ? (
-                  hasChanges ? `${Object.keys(pendingChanges).length} unsaved change(s)` : "Click on fields to edit"
-                ) : vehicle.data_last_fetched_at ? (
-                  timeUntilRefresh ? (
-                    `Can refresh in ${timeUntilRefresh.hours}h ${timeUntilRefresh.minutes}m`
-                  ) : (
-                    `Updated ${formatDistanceToNow(new Date(vehicle.data_last_fetched_at), { addSuffix: true })}`
-                  )
-                ) : (
-                  "Never fetched – Refresh now"
-                )}
-              </span>
+            {/* Right: Last updated */}
+            <div className="text-right text-xs text-gray-400">
+              {vehicle.data_last_fetched_at
+                ? timeUntilRefresh
+                  ? `Can refresh in ${timeUntilRefresh.hours}h ${timeUntilRefresh.minutes}m`
+                  : `Updated ${formatDistanceToNow(new Date(vehicle.data_last_fetched_at), { addSuffix: true })}`
+                : "Never fetched from RTO"}
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Tabs */}
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="w-full justify-start bg-background border border-border rounded-lg h-auto p-1 mb-6 flex-wrap">
-            <TabsTrigger value="overview" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <LayoutGrid className="h-4 w-4" />
-              <span className="hidden sm:inline">Overview</span>
-            </TabsTrigger>
-            <TabsTrigger value="specifications" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Car className="h-4 w-4" />
-              <span className="hidden sm:inline">Specifications</span>
-            </TabsTrigger>
-            <TabsTrigger value="ownership" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Ownership</span>
-            </TabsTrigger>
-            <TabsTrigger value="verification" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Shield className="h-4 w-4" />
-              <span className="hidden sm:inline">Verification</span>
-            </TabsTrigger>
-            <TabsTrigger value="documents" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <FileStack className="h-4 w-4" />
-              <span className="hidden sm:inline">Documents</span>
-            </TabsTrigger>
-            <TabsTrigger value="service" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Wrench className="h-4 w-4" />
-              <span className="hidden sm:inline">Service</span>
-            </TabsTrigger>
-            <TabsTrigger value="activity" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <History className="h-4 w-4" />
-              <span className="hidden sm:inline">Activity</span>
-            </TabsTrigger>
-            <TabsTrigger value="sell" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <IndianRupee className="h-4 w-4" />
-              <span className="hidden sm:inline">Sell</span>
-            </TabsTrigger>
-          </TabsList>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="w-full justify-start bg-white border border-gray-100 rounded-xl h-auto p-1 mb-8 flex-wrap gap-1">
+              <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-gray-900 data-[state=active]:text-white">
+                Overview
+              </TabsTrigger>
+              <TabsTrigger value="details" className="rounded-lg data-[state=active]:bg-gray-900 data-[state=active]:text-white">
+                Details
+              </TabsTrigger>
+              <TabsTrigger value="verification" className="rounded-lg data-[state=active]:bg-gray-900 data-[state=active]:text-white">
+                Verification
+              </TabsTrigger>
+              <TabsTrigger value="documents" className="rounded-lg data-[state=active]:bg-gray-900 data-[state=active]:text-white">
+                Documents
+              </TabsTrigger>
+              <TabsTrigger value="service" className="rounded-lg data-[state=active]:bg-gray-900 data-[state=active]:text-white">
+                Service
+              </TabsTrigger>
+              <TabsTrigger value="activity" className="rounded-lg data-[state=active]:bg-gray-900 data-[state=active]:text-white">
+                Activity
+              </TabsTrigger>
+              <TabsTrigger value="sell" className="rounded-lg data-[state=active]:bg-gray-900 data-[state=active]:text-white">
+                Sell
+              </TabsTrigger>
+            </TabsList>
 
-          {/* Overview Tab - Expiry Intelligence Only */}
-          <TabsContent value="overview" className="mt-0">
-            <ExpiryIntelligence vehicle={vehicle} />
-          </TabsContent>
+            {/* Overview Tab - Quick Look */}
+            <TabsContent value="overview" className="mt-0 space-y-6">
+              {/* Expiry Intelligence */}
+              <ExpiryIntelligence vehicle={vehicle} />
 
-          {/* Specifications Tab - Vehicle Identity + Technical Specs */}
-          <TabsContent value="specifications" className="mt-0">
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Vehicle Identity */}
-              <div className="bg-background border border-border rounded-lg p-6">
-                <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
-                  <Car className="h-5 w-5 text-muted-foreground" />
-                  Vehicle Identity
-                </h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <DetailItem label="Registration Number" value={vehicle.registration_number} />
-                  <EditableDetailItem
-                    label="Manufacturer"
-                    value={getCurrentValue("manufacturer")}
-                    fieldName="manufacturer"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    normalize
-                  />
-                  <EditableDetailItem
-                    label="Model"
-                    value={getCurrentValue("maker_model")}
-                    fieldName="maker_model"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    normalize
-                  />
-                  <EditableDetailItem
-                    label="Vehicle Class"
-                    value={getCurrentValue("vehicle_class")}
-                    fieldName="vehicle_class"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                  />
-                  <EditableDetailItem
-                    label="Vehicle Category"
-                    value={getCurrentValue("vehicle_category")}
-                    fieldName="vehicle_category"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                  />
-                  <EditableDetailItem
-                    label="Body Type"
-                    value={getCurrentValue("body_type")}
-                    fieldName="body_type"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                  />
-                  <EditableDetailItem
-                    label="Color"
-                    value={getCurrentValue("color")}
-                    fieldName="color"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    normalize
-                  />
-                  <EditableDetailItem
-                    label="Registration Date"
-                    value={getCurrentValue("registration_date")}
-                    fieldName="registration_date"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    inputType="date"
-                  />
-                  <div className="space-y-1">
-                    <span className="text-sm text-muted-foreground">RC Status</span>
-                    <div>
-                      {vehicle.rc_status ? (
-                        <Badge variant={vehicle.rc_status === "ACTIVE" ? "default" : "destructive"}>
-                          {vehicle.rc_status}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground italic">Not Available</span>
-                      )}
+              {/* Quick Status Grid */}
+              <div className="grid gap-3 grid-cols-2 sm:gap-4 lg:grid-cols-4">
+                <QuickStatusCard 
+                  label="Insurance" 
+                  date={vehicle.insurance_expiry} 
+                  onClick={() => setActiveTab("details")}
+                />
+                <QuickStatusCard 
+                  label="PUCC" 
+                  date={vehicle.pucc_valid_upto} 
+                  onClick={() => setActiveTab("details")}
+                />
+                <QuickStatusCard 
+                  label="Fitness" 
+                  date={vehicle.fitness_valid_upto} 
+                  onClick={() => setActiveTab("details")}
+                />
+                <QuickStatusCard 
+                  label="Road Tax" 
+                  date={vehicle.road_tax_valid_upto} 
+                  onClick={() => setActiveTab("details")}
+                />
+              </div>
+
+              {/* Verification & Documents Summary */}
+              <div className="grid gap-4 sm:gap-6 lg:grid-cols-2 xl:grid-cols-3">
+                {/* Verification Status */}
+                <button 
+                  onClick={() => setActiveTab("verification")}
+                  className="bg-white border border-gray-100 rounded-xl p-6 text-left hover:border-gray-200 hover:shadow-sm transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base font-medium text-gray-900 flex items-center gap-2">
+                      <Shield className="h-5 w-5 text-gray-400" />
+                      Verification Status
+                    </h3>
+                    <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-gray-500 group-hover:translate-x-0.5 transition-all" />
+                  </div>
+                  <VerificationProgress progress={verificationProgress} variant="inline" />
+                  {!vehicle.is_verified && (
+                    <p className="text-sm text-gray-500 mt-3">
+                      Complete verification to unlock all features
+                    </p>
+                  )}
+                </button>
+
+                {/* Documents Summary */}
+                <button 
+                  onClick={() => setActiveTab("documents")}
+                  className="bg-white border border-gray-100 rounded-xl p-6 text-left hover:border-gray-200 hover:shadow-sm transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base font-medium text-gray-900 flex items-center gap-2">
+                      <FileText className="h-5 w-5 text-gray-400" />
+                      Documents
+                    </h3>
+                    <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-gray-500 group-hover:translate-x-0.5 transition-all" />
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-3xl font-semibold text-gray-900">{documents.length}</div>
+                    <div className="text-sm text-gray-500">
+                      {documents.length === 0 
+                        ? "No documents uploaded" 
+                        : documents.length === 1 
+                        ? "document uploaded" 
+                        : "documents uploaded"}
                     </div>
+                  </div>
+                  {documents.length === 0 && (
+                    <p className="text-sm text-gray-500 mt-3">
+                      Upload RC, insurance, and other documents
+                    </p>
+                  )}
+                </button>
+              </div>
+
+              {/* Quick Info Card */}
+              <div className="bg-white border border-gray-100 rounded-xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-medium text-gray-900 flex items-center gap-2">
+                    <Info className="h-5 w-5 text-gray-400" />
+                    Quick Info
+                  </h3>
+                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("details")} className="text-gray-500">
+                    View All
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+                <div className="grid gap-3 grid-cols-2 sm:gap-4 lg:grid-cols-4">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Owner</p>
+                    <p className="font-medium text-gray-900 text-sm">{vehicle.owner_name ? toTitleCase(vehicle.owner_name) : "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Owner Count</p>
+                    <p className="font-medium text-gray-900 text-sm">{vehicle.owner_count || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Finance Status</p>
+                    <Badge variant={vehicle.is_financed ? "destructive" : "outline"} className={`text-xs ${vehicle.is_financed ? "" : "text-green-600 border-green-200"}`}>
+                      {vehicle.is_financed ? "Financed" : "Not Financed"}
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">RC Status</p>
+                    <p className={`font-medium text-sm ${vehicle.rc_status === "ACTIVE" ? "text-green-600" : "text-gray-900"}`}>
+                      {vehicle.rc_status || "—"}
+                    </p>
                   </div>
                 </div>
               </div>
+            </TabsContent>
 
-              {/* Technical Specifications */}
-              <div className="bg-background border border-border rounded-lg p-6">
-                <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
-                  <Settings className="h-5 w-5 text-muted-foreground" />
-                  Technical Specifications
-                </h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <EditableDetailItem
-                    label="Engine Number"
-                    value={getCurrentValue("engine_number")}
-                    fieldName="engine_number"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    icon={<Hash className="h-3.5 w-3.5" />}
-                  />
-                  <EditableDetailItem
-                    label="Chassis Number"
-                    value={getCurrentValue("chassis_number")}
-                    fieldName="chassis_number"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    icon={<Hash className="h-3.5 w-3.5" />}
-                  />
-                  <EditableDetailItem
-                    label="Cubic Capacity (cc)"
-                    value={getCurrentValue("cubic_capacity")}
-                    fieldName="cubic_capacity"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    inputType="number"
-                    icon={<Gauge className="h-3.5 w-3.5" />}
-                  />
-                  <EditableDetailItem
-                    label="Fuel Type"
-                    value={getCurrentValue("fuel_type")}
-                    fieldName="fuel_type"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    icon={<Fuel className="h-3.5 w-3.5" />}
-                  />
-                  <EditableDetailItem
-                    label="Seating Capacity"
-                    value={getCurrentValue("seating_capacity")}
-                    fieldName="seating_capacity"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    inputType="number"
-                    icon={<Users className="h-3.5 w-3.5" />}
-                  />
-                  <EditableDetailItem
-                    label="Emission Norms"
-                    value={getCurrentValue("emission_norms")}
-                    fieldName="emission_norms"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    icon={<FileCheck className="h-3.5 w-3.5" />}
-                  />
-                  <EditableDetailItem
-                    label="Wheelbase"
-                    value={getCurrentValue("wheelbase")}
-                    fieldName="wheelbase"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    icon={<Weight className="h-3.5 w-3.5" />}
-                  />
-                  <EditableDetailItem
-                    label="Gross Vehicle Weight"
-                    value={getCurrentValue("gross_vehicle_weight")}
-                    fieldName="gross_vehicle_weight"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    icon={<Weight className="h-3.5 w-3.5" />}
-                  />
-                  <EditableDetailItem
-                    label="Unladen Weight"
-                    value={getCurrentValue("unladen_weight")}
-                    fieldName="unladen_weight"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    icon={<Weight className="h-3.5 w-3.5" />}
-                  />
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* Ownership Tab - Ownership & Finance + Document Expiry Status */}
-          <TabsContent value="ownership" className="mt-0">
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Ownership & Finance */}
-              <div className="bg-background border border-border rounded-lg p-6">
-                <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
-                  <User className="h-5 w-5 text-muted-foreground" />
-                  Ownership & Finance
-                </h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <EditableDetailItem
-                    label="Owner Name"
-                    value={getCurrentValue("owner_name")}
-                    fieldName="owner_name"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    icon={<User className="h-3.5 w-3.5" />}
-                    normalize
-                  />
-                  <EditableDetailItem
-                    label="Owner Count"
-                    value={getCurrentValue("owner_count")}
-                    fieldName="owner_count"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    inputType="number"
-                    icon={<Users className="h-3.5 w-3.5" />}
-                  />
-                  <div className="space-y-1">
-                    <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                      <Banknote className="h-3.5 w-3.5" />
-                      Finance Status
-                    </span>
-                    <div>
-                      <Badge variant={vehicle.is_financed ? "destructive" : "default"}>
-                        {vehicle.is_financed ? "Financed" : "Not Financed"}
-                      </Badge>
-                    </div>
-                  </div>
-                  <EditableDetailItem
-                    label="Financer"
-                    value={getCurrentValue("financer")}
-                    fieldName="financer"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    icon={<Banknote className="h-3.5 w-3.5" />}
-                    normalize
-                  />
-                  <EditableDetailItem
-                    label="NOC Details"
-                    value={getCurrentValue("noc_details")}
-                    fieldName="noc_details"
-                    isEditing={isEditing}
-                    onChange={handleFieldChange}
-                    icon={<FileCheck className="h-3.5 w-3.5" />}
-                  />
+            {/* Details Tab - Full Vehicle Info with Edit */}
+            <TabsContent value="details" className="mt-0 space-y-6">
+              {/* Edit Controls */}
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  {isEditing 
+                    ? hasChanges 
+                      ? `${Object.keys(pendingChanges).length} unsaved change(s)` 
+                      : "Click on fields to edit"
+                    : "View and edit vehicle information"}
+                </p>
+                <div className="flex gap-2">
+                  {isEditing ? (
+                    <>
+                      <Button variant="outline" size="sm" onClick={handleCancelEdit} disabled={isSaving}>
+                        <X className="h-4 w-4 mr-1.5" />
+                        Cancel
+                      </Button>
+                      <Button size="sm" onClick={handleSaveChanges} disabled={isSaving || !hasChanges}>
+                        {isSaving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
+                        {isSaving ? "Saving..." : "Save Changes"}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                      <Pencil className="h-4 w-4 mr-1.5" />
+                      Edit Details
+                    </Button>
+                  )}
                 </div>
               </div>
 
-              {/* Document Expiry Status */}
-              <div className="bg-background border border-border rounded-lg p-6">
-                <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
-                  <Calendar className="h-5 w-5 text-muted-foreground" />
-                  Document Expiry Status
-                </h3>
-                {isEditing ? (
+              {/* Vehicle Details Grid */}
+              <div className="grid gap-4 sm:gap-6 lg:grid-cols-2 xl:grid-cols-3">
+                {/* Vehicle Identity */}
+                <SectionCard title="Vehicle Identity" icon={Car}>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <EditableDetailItem
-                      label="Insurance Expiry"
-                      value={getCurrentValue("insurance_expiry")}
-                      fieldName="insurance_expiry"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      inputType="date"
-                    />
-                    <EditableDetailItem
-                      label="Insurance Company"
-                      value={getCurrentValue("insurance_company")}
-                      fieldName="insurance_company"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      normalize
-                    />
-                    <EditableDetailItem
-                      label="PUCC Valid Until"
-                      value={getCurrentValue("pucc_valid_upto")}
-                      fieldName="pucc_valid_upto"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      inputType="date"
-                    />
-                    <EditableDetailItem
-                      label="Fitness Valid Until"
-                      value={getCurrentValue("fitness_valid_upto")}
-                      fieldName="fitness_valid_upto"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      inputType="date"
-                    />
-                    <EditableDetailItem
-                      label="Road Tax Valid Until"
-                      value={getCurrentValue("road_tax_valid_upto")}
-                      fieldName="road_tax_valid_upto"
-                      isEditing={isEditing}
-                      onChange={handleFieldChange}
-                      inputType="date"
-                    />
+                    <DetailItem label="Registration Number" value={vehicle.registration_number} />
+                    <EditableDetailItem label="Manufacturer" value={getCurrentValue("manufacturer")} fieldName="manufacturer" isEditing={isEditing} onChange={handleFieldChange} normalize />
+                    <EditableDetailItem label="Model" value={getCurrentValue("maker_model")} fieldName="maker_model" isEditing={isEditing} onChange={handleFieldChange} normalize />
+                    <EditableDetailItem label="Vehicle Class" value={getCurrentValue("vehicle_class")} fieldName="vehicle_class" isEditing={isEditing} onChange={handleFieldChange} />
+                    <EditableDetailItem label="Color" value={getCurrentValue("color")} fieldName="color" isEditing={isEditing} onChange={handleFieldChange} normalize />
+                    <EditableDetailItem label="Registration Date" value={getCurrentValue("registration_date")} fieldName="registration_date" isEditing={isEditing} onChange={handleFieldChange} inputType="date" />
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {expiryItems.map((item) => {
-                      const status = getExpiryStatus(item.date);
-                      return (
-                        <div key={item.label} className="flex items-center justify-between p-3 rounded-lg border border-border">
-                          <div>
-                            <p className="font-medium text-sm">{item.label}</p>
-                            {item.date ? (
-                              <p className="text-xs text-muted-foreground">
-                                {format(new Date(item.date), "dd MMM yyyy")}
-                                {item.company && ` • ${item.company}`}
-                              </p>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">Not available</p>
-                            )}
-                          </div>
-                          {status && (
-                            <Badge variant={status.variant} className="flex items-center gap-1">
-                              <status.icon className="h-3 w-3" />
-                              {status.label}
-                            </Badge>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </TabsContent>
+                </SectionCard>
 
-          {/* Verification Tab */}
-          <TabsContent value="verification" className="mt-0">
-            <div className="space-y-6">
-              {/* Photo Verification */}
+                {/* Technical Specifications */}
+                <SectionCard title="Technical Specs" icon={Settings}>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <EditableDetailItem label="Engine Number" value={getCurrentValue("engine_number")} fieldName="engine_number" isEditing={isEditing} onChange={handleFieldChange} icon={<Hash className="h-3.5 w-3.5" />} />
+                    <EditableDetailItem label="Chassis Number" value={getCurrentValue("chassis_number")} fieldName="chassis_number" isEditing={isEditing} onChange={handleFieldChange} icon={<Hash className="h-3.5 w-3.5" />} />
+                    <EditableDetailItem label="Cubic Capacity (cc)" value={getCurrentValue("cubic_capacity")} fieldName="cubic_capacity" isEditing={isEditing} onChange={handleFieldChange} inputType="number" icon={<Gauge className="h-3.5 w-3.5" />} />
+                    <EditableDetailItem label="Fuel Type" value={getCurrentValue("fuel_type")} fieldName="fuel_type" isEditing={isEditing} onChange={handleFieldChange} icon={<Fuel className="h-3.5 w-3.5" />} />
+                    <EditableDetailItem label="Seating Capacity" value={getCurrentValue("seating_capacity")} fieldName="seating_capacity" isEditing={isEditing} onChange={handleFieldChange} inputType="number" icon={<Users className="h-3.5 w-3.5" />} />
+                    <EditableDetailItem label="Emission Norms" value={getCurrentValue("emission_norms")} fieldName="emission_norms" isEditing={isEditing} onChange={handleFieldChange} icon={<FileCheck className="h-3.5 w-3.5" />} />
+                  </div>
+                </SectionCard>
+
+                {/* Ownership & Finance */}
+                <SectionCard title="Ownership" icon={User}>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <EditableDetailItem label="Owner Name" value={getCurrentValue("owner_name")} fieldName="owner_name" isEditing={isEditing} onChange={handleFieldChange} icon={<User className="h-3.5 w-3.5" />} normalize />
+                    <EditableDetailItem label="Owner Count" value={getCurrentValue("owner_count")} fieldName="owner_count" isEditing={isEditing} onChange={handleFieldChange} inputType="number" icon={<Users className="h-3.5 w-3.5" />} />
+                    <div className="space-y-1">
+                      <span className="text-sm text-gray-500 flex items-center gap-1.5">
+                        <Banknote className="h-3.5 w-3.5" />
+                        Finance Status
+                      </span>
+                      <div>
+                        <Badge variant={vehicle.is_financed ? "destructive" : "outline"} className={vehicle.is_financed ? "" : "text-green-600 border-green-200"}>
+                          {vehicle.is_financed ? "Financed" : "Not Financed"}
+                        </Badge>
+                      </div>
+                    </div>
+                    <EditableDetailItem label="Financer" value={getCurrentValue("financer")} fieldName="financer" isEditing={isEditing} onChange={handleFieldChange} icon={<Banknote className="h-3.5 w-3.5" />} normalize />
+                  </div>
+                </SectionCard>
+
+                {/* Document Expiry Dates */}
+                <SectionCard title="Document Expiry Dates" icon={Calendar}>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <EditableDetailItem label="Insurance Expiry" value={getCurrentValue("insurance_expiry")} fieldName="insurance_expiry" isEditing={isEditing} onChange={handleFieldChange} inputType="date" />
+                    <EditableDetailItem label="Insurance Company" value={getCurrentValue("insurance_company")} fieldName="insurance_company" isEditing={isEditing} onChange={handleFieldChange} normalize />
+                    <EditableDetailItem label="PUCC Valid Until" value={getCurrentValue("pucc_valid_upto")} fieldName="pucc_valid_upto" isEditing={isEditing} onChange={handleFieldChange} inputType="date" />
+                    <EditableDetailItem label="Fitness Valid Until" value={getCurrentValue("fitness_valid_upto")} fieldName="fitness_valid_upto" isEditing={isEditing} onChange={handleFieldChange} inputType="date" />
+                    <EditableDetailItem label="Road Tax Valid Until" value={getCurrentValue("road_tax_valid_upto")} fieldName="road_tax_valid_upto" isEditing={isEditing} onChange={handleFieldChange} inputType="date" />
+                  </div>
+                </SectionCard>
+              </div>
+            </TabsContent>
+
+            {/* Verification Tab */}
+            <TabsContent value="verification" className="mt-0 space-y-6">
+              <VerificationProgress progress={verificationProgress} variant="card" />
+              
               <VehicleVerificationSection
                 vehicleId={vehicle.id}
                 registrationNumber={vehicle.registration_number}
@@ -1275,143 +985,95 @@ const VehicleDetails = () => {
                 onVerificationComplete={fetchVehicle}
                 variant="inline"
               />
-            </div>
-          </TabsContent>
+            </TabsContent>
 
-          {/* Documents Tab */}
-          <TabsContent value="documents" className="mt-0">
-            <div className="space-y-6">
-              {/* Document Repository */}
-              <div className="bg-background border border-border rounded-lg p-6">
-                <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
-                  <Shield className="h-5 w-5 text-muted-foreground" />
-                  Document Repository
-                </h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Upload documents to store them and optionally extract data using AI
-                </p>
+            {/* Documents Tab */}
+            <TabsContent value="documents" className="mt-0">
+              <SectionCard title="Document Repository" icon={FileText} className="mb-0">
+                <p className="text-sm text-gray-500 mb-6">Upload documents to store them and optionally extract data using AI</p>
+                
                 <div className="flex flex-col sm:flex-row gap-4 mb-6">
                   <div className="flex-1">
-                    <Label htmlFor="docType" className="text-sm">Document Type</Label>
+                    <Label htmlFor="docType" className="text-sm text-gray-600">Document Type</Label>
                     <Select value={selectedDocType} onValueChange={setSelectedDocType}>
-                      <SelectTrigger className="mt-1.5">
+                      <SelectTrigger className="mt-1.5 bg-white">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {documentTypes.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
-                          </SelectItem>
+                          <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="flex items-end">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileSelect}
-                      accept=".pdf,.jpg,.jpeg,.png,.webp"
-                      className="hidden"
-                    />
-                    <Button 
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading || isAnalyzing}
-                    >
+                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" />
+                    <Button onClick={() => fileInputRef.current?.click()} disabled={uploading || isAnalyzing} className="w-full sm:w-auto">
                       {isAnalyzing ? (
-                        <>
-                          <Sparkles className="h-4 w-4 mr-2 animate-pulse" />
-                          Analyzing...
-                        </>
+                        <><Sparkles className="h-4 w-4 mr-2 animate-pulse" />Analyzing...</>
                       ) : uploading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Uploading...
-                        </>
+                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
                       ) : (
-                        <>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Upload Document
-                        </>
+                        <><Upload className="h-4 w-4 mr-2" />Upload Document</>
                       )}
                     </Button>
                   </div>
                 </div>
-                {isAnalyzing && (
-                  <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
-                    <Sparkles className="h-4 w-4 text-primary animate-pulse" />
-                    <span>AI is analyzing your document to extract vehicle data...</span>
-                  </div>
-                )}
 
                 {documents.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground border border-dashed border-border rounded-lg">
-                    <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>No documents uploaded yet</p>
+                  <div className="text-center py-12 border border-dashed border-gray-200 rounded-xl">
+                    <FileText className="h-10 w-10 mx-auto mb-3 text-gray-300" />
+                    <p className="text-gray-500">No documents uploaded yet</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {documents.map((doc) => (
-                      <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
+                      <div key={doc.id} className="flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-gray-200 transition-colors">
                         <div className="flex items-center gap-3">
-                          <FileText className="h-5 w-5 text-muted-foreground" />
+                          <FileText className="h-5 w-5 text-gray-400" />
                           <div>
-                            <p className="font-medium text-sm">{doc.document_name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {documentTypes.find((t) => t.value === doc.document_type)?.label} • 
-                              {format(new Date(doc.uploaded_at), " dd MMM yyyy")}
+                            <p className="font-medium text-sm text-gray-900">{doc.document_name}</p>
+                            <p className="text-xs text-gray-500">
+                              {documentTypes.find((t) => t.value === doc.document_type)?.label} · {format(new Date(doc.uploaded_at), "dd MMM yyyy")}
                             </p>
                           </div>
                         </div>
                         <div className="flex gap-1">
                           {doc.file_path.match(/\.(jpg|jpeg|png|webp)$/i) && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleReanalyzeDocument(doc)}
-                              disabled={isAnalyzing}
-                              title="Scan with AI"
-                            >
-                              <Sparkles className="h-4 w-4 text-primary" />
+                            <Button variant="ghost" size="icon" onClick={() => handleReanalyzeDocument(doc)} disabled={isAnalyzing} className="h-8 w-8">
+                              <Sparkles className="h-4 w-4 text-gray-500" />
                             </Button>
                           )}
-                          <Button variant="ghost" size="sm" onClick={() => handleDownload(doc)} title="Download">
-                            <Download className="h-4 w-4" />
+                          <Button variant="ghost" size="icon" onClick={() => handleDownload(doc)} className="h-8 w-8">
+                            <Download className="h-4 w-4 text-gray-500" />
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteDocument(doc)} title="Delete">
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteDocument(doc)} className="h-8 w-8">
+                            <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
-              </div>
-            </div>
-          </TabsContent>
+              </SectionCard>
+            </TabsContent>
 
-          {/* Service Tab */}
-          <TabsContent value="service" className="mt-0">
-            <ServiceHistory 
-              vehicleId={vehicle.id} 
-              registrationNumber={vehicle.registration_number} 
-              variant="inline"
-            />
-          </TabsContent>
+            {/* Service Tab */}
+            <TabsContent value="service" className="mt-0">
+              <ServiceHistory vehicleId={vehicle.id} registrationNumber={vehicle.registration_number} variant="inline" />
+            </TabsContent>
 
-          {/* Activity Tab */}
-          <TabsContent value="activity" className="mt-0">
-            <VehicleHistory vehicleId={vehicle.id} variant="inline" />
-          </TabsContent>
+            {/* Activity Tab */}
+            <TabsContent value="activity" className="mt-0">
+              <VehicleHistory vehicleId={vehicle.id} variant="inline" />
+            </TabsContent>
 
-          {/* Sell Tab */}
-          <TabsContent value="sell" className="mt-0">
-            <SellVehicleTab 
-              vehicle={vehicle} 
-              verificationProgress={calculateVerificationProgress(vehicle, documents)}
-            />
-          </TabsContent>
-        </Tabs>
+            {/* Sell Tab */}
+            <TabsContent value="sell" className="mt-0">
+              <SellVehicleTab vehicle={vehicle} verificationProgress={verificationProgress} />
+            </TabsContent>
+          </Tabs>
+        </motion.div>
       </main>
 
       {/* AI Analysis Modal */}
@@ -1431,9 +1093,7 @@ const VehicleDetails = () => {
       <UploadConsentDialog
         open={showUploadConsent}
         onOpenChange={(open) => {
-          if (!open) {
-            setPendingUploadFile(null);
-          }
+          if (!open) setPendingUploadFile(null);
           setShowUploadConsent(open);
         }}
         onConfirm={processFileUpload}

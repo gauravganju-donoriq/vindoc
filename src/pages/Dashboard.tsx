@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import { Car, Plus, LogOut, AlertTriangle, CheckCircle, Clock, Trash2, ShieldCheck, ShieldX, Shield, Settings } from "lucide-react";
-import { useIsAdminUser } from "@/hooks/useAdminCheck";
+import { 
+  Car, Plus, AlertTriangle, CheckCircle, Clock, Trash2, 
+  ShieldCheck, ChevronRight, MoreHorizontal, Calendar, Fuel
+} from "lucide-react";
 import { format, differenceInDays, isPast } from "date-fns";
 import {
   AlertDialog,
@@ -18,10 +19,17 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import PendingTransfers from "@/components/transfers/PendingTransfers";
 import { PendingOwnershipClaims } from "@/components/transfers/PendingOwnershipClaims";
+import { DashboardLayout, DashboardSkeleton } from "@/components/layout/DashboardLayout";
+import { toTitleCase } from "@/lib/utils";
 
 interface Vehicle {
   id: string;
@@ -29,6 +37,8 @@ interface Vehicle {
   owner_name: string | null;
   maker_model: string | null;
   manufacturer: string | null;
+  fuel_type: string | null;
+  registration_date: string | null;
   insurance_expiry: string | null;
   pucc_valid_upto: string | null;
   fitness_valid_upto: string | null;
@@ -43,13 +53,244 @@ const getExpiryStatus = (expiryDate: string | null) => {
   const daysLeft = differenceInDays(date, new Date());
   
   if (isPast(date)) {
-    return { status: "expired", label: "Expired", variant: "destructive" as const, icon: AlertTriangle };
+    return { status: "expired", label: "Expired", daysLeft: 0, color: "text-red-600", bg: "bg-red-50" };
   } else if (daysLeft <= 30) {
-    return { status: "expiring", label: `${daysLeft}d left`, variant: "secondary" as const, icon: Clock };
+    return { status: "expiring", label: `${daysLeft}d`, daysLeft, color: "text-amber-600", bg: "bg-amber-50" };
   } else {
-    return { status: "valid", label: "Valid", variant: "default" as const, icon: CheckCircle };
+    return { status: "valid", label: "OK", daysLeft, color: "text-green-600", bg: "bg-green-50" };
   }
 };
+
+const getMostUrgentStatus = (vehicle: Vehicle) => {
+  const dates = [
+    { type: "Insurance", date: vehicle.insurance_expiry },
+    { type: "PUCC", date: vehicle.pucc_valid_upto },
+    { type: "Fitness", date: vehicle.fitness_valid_upto },
+    { type: "Road Tax", date: vehicle.road_tax_valid_upto },
+  ];
+
+  let mostUrgent: { type: string; status: ReturnType<typeof getExpiryStatus> } | null = null;
+
+  for (const item of dates) {
+    const status = getExpiryStatus(item.date);
+    if (status) {
+      if (!mostUrgent || 
+          (status.status === "expired" && mostUrgent.status?.status !== "expired") ||
+          (status.status === "expiring" && mostUrgent.status?.status === "valid") ||
+          (status.status === "expiring" && mostUrgent.status?.status === "expiring" && status.daysLeft < (mostUrgent.status?.daysLeft || 999))) {
+        mostUrgent = { type: item.type, status };
+      }
+    }
+  }
+
+  return mostUrgent;
+};
+
+// Get all document statuses for expanded view
+const getAllDocumentStatuses = (vehicle: Vehicle) => {
+  return [
+    { type: "Insurance", short: "Ins", date: vehicle.insurance_expiry, status: getExpiryStatus(vehicle.insurance_expiry) },
+    { type: "PUCC", short: "PUCC", date: vehicle.pucc_valid_upto, status: getExpiryStatus(vehicle.pucc_valid_upto) },
+    { type: "Fitness", short: "Fit", date: vehicle.fitness_valid_upto, status: getExpiryStatus(vehicle.fitness_valid_upto) },
+    { type: "Road Tax", short: "Tax", date: vehicle.road_tax_valid_upto, status: getExpiryStatus(vehicle.road_tax_valid_upto) },
+  ];
+};
+
+// Vehicle card component - enhanced for larger screens
+const VehicleCard = ({ 
+  vehicle, 
+  onDelete, 
+  index 
+}: { 
+  vehicle: Vehicle; 
+  onDelete: (id: string) => void;
+  index: number;
+}) => {
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const urgentStatus = getMostUrgentStatus(vehicle);
+  const allDocumentStatuses = getAllDocumentStatuses(vehicle);
+  const allDocumentsOk = !urgentStatus || urgentStatus.status?.status === "valid";
+  const registrationYear = vehicle.registration_date ? new Date(vehicle.registration_date).getFullYear() : null;
+
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: index * 0.03 }}
+      >
+        <Link
+          to={`/vehicle/${vehicle.id}`}
+          className="group block bg-white border border-gray-100 rounded-xl hover:border-gray-200 hover:shadow-sm transition-all overflow-hidden"
+        >
+          {/* Main content */}
+          <div className="p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              {/* Left: Vehicle info */}
+              <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+                {/* Vehicle Icon */}
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 transition-colors">
+                  <Car className="h-5 w-5 sm:h-6 sm:w-6 text-gray-600" />
+                </div>
+
+                {/* Vehicle Info */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-mono font-semibold text-gray-900 text-base sm:text-lg">
+                      {vehicle.registration_number}
+                    </h3>
+                    {vehicle.is_verified && (
+                      <ShieldCheck className="h-4 w-4 text-green-600 flex-shrink-0" />
+                    )}
+                  </div>
+                  <p className="text-gray-500 text-sm truncate mt-0.5">
+                    {vehicle.manufacturer && toTitleCase(vehicle.manufacturer)}
+                    {vehicle.maker_model && vehicle.manufacturer && " · "}
+                    {vehicle.maker_model && toTitleCase(vehicle.maker_model)}
+                    {!vehicle.manufacturer && !vehicle.maker_model && "Vehicle details not available"}
+                  </p>
+                  
+                  {/* Quick specs - visible on sm+ */}
+                  <div className="hidden sm:flex items-center gap-3 mt-2 text-xs text-gray-400">
+                    {vehicle.fuel_type && (
+                      <span className="flex items-center gap-1">
+                        <Fuel className="h-3 w-3" />
+                        {toTitleCase(vehicle.fuel_type)}
+                      </span>
+                    )}
+                    {registrationYear && (
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {registrationYear}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: Actions */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Mobile status badge */}
+                <div className="sm:hidden">
+                  {allDocumentsOk ? (
+                    <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 text-xs">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      OK
+                    </Badge>
+                  ) : urgentStatus && (
+                    <Badge 
+                      variant="outline" 
+                      className={`text-xs ${
+                        urgentStatus.status?.status === "expired" 
+                          ? "text-red-600 border-red-200 bg-red-50" 
+                          : "text-amber-600 border-amber-200 bg-amber-50"
+                      }`}
+                    >
+                      {urgentStatus.status?.status === "expired" ? (
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                      ) : (
+                        <Clock className="h-3 w-3 mr-1" />
+                      )}
+                      {urgentStatus.status?.label}
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Actions dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-600">
+                      <MoreHorizontal className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link to={`/vehicle/${vehicle.id}`}>View Details</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      className="text-red-600 focus:text-red-600"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setShowDeleteDialog(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Arrow - visible on sm+ */}
+                <ChevronRight className="hidden sm:block h-5 w-5 text-gray-300 group-hover:text-gray-400 group-hover:translate-x-0.5 transition-all" />
+              </div>
+            </div>
+          </div>
+
+          {/* Document status bar - visible on sm+ */}
+          <div className="hidden sm:flex items-center gap-4 px-5 py-3 bg-gray-50/50 border-t border-gray-100">
+            {allDocumentStatuses.map((doc) => (
+              <div key={doc.type} className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-500">{doc.short}:</span>
+                {doc.status ? (
+                  <span className={`text-xs font-medium ${doc.status.color}`}>
+                    {doc.status.label}
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400">—</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </Link>
+      </motion.div>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Vehicle?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {vehicle.registration_number} and all associated documents.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => onDelete(vehicle.id)}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+};
+
+// Empty state component
+const EmptyState = () => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.95 }}
+    animate={{ opacity: 1, scale: 1 }}
+    transition={{ duration: 0.4 }}
+    className="text-center py-12 sm:py-16 px-4 sm:px-6"
+  >
+    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-5 sm:mb-6">
+      <Car className="h-7 w-7 sm:h-8 sm:w-8 text-gray-400" />
+    </div>
+    <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">No vehicles yet</h3>
+    <p className="text-gray-500 mb-6 sm:mb-8 max-w-sm mx-auto text-sm sm:text-base">
+      Add your first vehicle to start tracking documents and get smart renewal reminders.
+    </p>
+    <Button asChild size="lg" className="rounded-full px-6 sm:px-8">
+      <Link to="/add-vehicle">
+        <Plus className="h-5 w-5 mr-2" />
+        Add Your First Vehicle
+      </Link>
+    </Button>
+  </motion.div>
+);
 
 const Dashboard = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -57,7 +298,6 @@ const Dashboard = () => {
   const [userEmail, setUserEmail] = useState<string | undefined>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { isAdmin } = useIsAdminUser();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -100,11 +340,6 @@ const Dashboard = () => {
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate("/auth");
-  };
-
   const handleDeleteVehicle = async (vehicleId: string) => {
     try {
       const { error } = await supabase
@@ -128,213 +363,51 @@ const Dashboard = () => {
     }
   };
 
-  const getMostUrgentStatus = (vehicle: Vehicle) => {
-    const dates = [
-      { type: "Insurance", date: vehicle.insurance_expiry },
-      { type: "PUCC", date: vehicle.pucc_valid_upto },
-      { type: "Fitness", date: vehicle.fitness_valid_upto },
-      { type: "Road Tax", date: vehicle.road_tax_valid_upto },
-    ];
-
-    let mostUrgent: { type: string; status: ReturnType<typeof getExpiryStatus> } | null = null;
-
-    for (const item of dates) {
-      const status = getExpiryStatus(item.date);
-      if (status) {
-        if (!mostUrgent || 
-            (status.status === "expired" && mostUrgent.status?.status !== "expired") ||
-            (status.status === "expiring" && mostUrgent.status?.status === "valid")) {
-          mostUrgent = { type: item.type, status };
-        }
-      }
-    }
-
-    return mostUrgent;
-  };
-
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
-              <Shield className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <h1 className="text-lg font-semibold">VinDoc</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/settings">
-                <Settings className="h-4 w-4" />
-              </Link>
-            </Button>
-            {isAdmin && (
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/admin">
-                  <Shield className="h-4 w-4 mr-2" />
-                  Admin
-                </Link>
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8">
-        {/* Pending Ownership Claims Section */}
-        <PendingOwnershipClaims />
-
-        {/* Pending Transfers Section */}
-        <PendingTransfers userEmail={userEmail} onTransferAccepted={fetchVehicles} />
-
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-semibold">My Vehicles</h2>
-            <p className="text-sm text-muted-foreground">
-              {vehicles.length === 0
-                ? "Add your first vehicle to get started"
-                : `${vehicles.length} vehicle${vehicles.length > 1 ? "s" : ""} registered`}
-            </p>
-          </div>
-          <Button asChild>
+    <DashboardLayout
+      title="My Vehicles"
+      subtitle={
+        vehicles.length === 0
+          ? "Add your first vehicle to get started"
+          : `${vehicles.length} vehicle${vehicles.length > 1 ? "s" : ""} registered`
+      }
+      actions={
+        vehicles.length > 0 && (
+          <Button asChild className="rounded-full">
             <Link to="/add-vehicle">
               <Plus className="h-4 w-4 mr-2" />
               Add Vehicle
             </Link>
           </Button>
-        </div>
+        )
+      }
+    >
+      {/* Pending Ownership Claims Section */}
+      <PendingOwnershipClaims />
 
-        {vehicles.length === 0 ? (
-          <Card className="text-center py-12">
-            <CardContent>
-              <Car className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No vehicles yet</h3>
-              <p className="text-muted-foreground mb-4">
-                Add your first vehicle to start tracking documents and expiry dates.
-              </p>
-              <Button asChild>
-                <Link to="/add-vehicle">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Your First Vehicle
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {vehicles.map((vehicle) => {
-              const urgentStatus = getMostUrgentStatus(vehicle);
-              return (
-                <Card key={vehicle.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle className="text-lg font-mono">
-                          {vehicle.registration_number}
-                        </CardTitle>
-                        <CardDescription>
-                          {vehicle.maker_model || vehicle.manufacturer || "Vehicle details not available"}
-                        </CardDescription>
-                      </div>
-                      <div className="flex flex-col gap-1 items-end">
-                        {vehicle.is_verified ? (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Badge className="flex items-center gap-1 bg-primary text-primary-foreground cursor-help">
-                                  <ShieldCheck className="h-3 w-3" />
-                                  Verified
-                                </Badge>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Verified on {vehicle.verified_at ? format(new Date(vehicle.verified_at), "dd MMM yyyy 'at' h:mm a") : "N/A"}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        ) : (
-                          <Badge variant="outline" className="flex items-center gap-1 text-muted-foreground">
-                            <ShieldX className="h-3 w-3" />
-                            Unverified
-                          </Badge>
-                        )}
-                        {urgentStatus && (
-                          <Badge variant={urgentStatus.status.variant} className="flex items-center gap-1">
-                            <urgentStatus.status.icon className="h-3 w-3" />
-                            {urgentStatus.type}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2 text-sm">
-                      {vehicle.owner_name && (
-                        <p className="text-muted-foreground">
-                          Owner: <span className="text-foreground">{vehicle.owner_name}</span>
-                        </p>
-                      )}
-                      {vehicle.insurance_expiry && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Insurance:</span>
-                          <span>{format(new Date(vehicle.insurance_expiry), "dd MMM yyyy")}</span>
-                        </div>
-                      )}
-                      {vehicle.pucc_valid_upto && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">PUCC:</span>
-                          <span>{format(new Date(vehicle.pucc_valid_upto), "dd MMM yyyy")}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex gap-2 mt-4">
-                      <Button variant="outline" size="sm" className="flex-1" asChild>
-                        <Link to={`/vehicle/${vehicle.id}`}>View Details</Link>
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Vehicle?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will permanently delete {vehicle.registration_number} and all associated documents.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteVehicle(vehicle.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </main>
-    </div>
+      {/* Pending Transfers Section */}
+      <PendingTransfers userEmail={userEmail} onTransferAccepted={fetchVehicles} />
+
+      {/* Vehicle Grid - 2 columns on xl+ */}
+      {vehicles.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <div className="grid gap-3 xl:grid-cols-2 2xl:gap-4">
+          {vehicles.map((vehicle, index) => (
+            <VehicleCard
+              key={vehicle.id}
+              vehicle={vehicle}
+              onDelete={handleDeleteVehicle}
+              index={index}
+            />
+          ))}
+        </div>
+      )}
+    </DashboardLayout>
   );
 };
 

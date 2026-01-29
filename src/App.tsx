@@ -11,6 +11,7 @@ import VehicleDetails from "./pages/VehicleDetails";
 import Admin from "./pages/Admin";
 import Settings from "./pages/Settings";
 import StyleGuide from "./pages/StyleGuide";
+import Deck from "./pages/Deck";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/admin" element={<Admin />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/style-guide" element={<StyleGuide />} />
+          <Route path="/deck" element={<Deck />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

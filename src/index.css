@@ -139,30 +139,6 @@
    LANDING PAGE COMPONENTS
    ======================== */
 
-/* Hero gradient - subtle warmth */
-.hero-gradient {
-  background: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 20% 98%) 100%);
-}
-
-/* Quote card - pain points styling */
-.quote-card {
-  border-left: 3px solid hsl(var(--primary));
-  background: hsl(var(--card));
-  padding: 1.25rem 1.5rem;
-  border-radius: 0 0.75rem 0.75rem 0;
-  box-shadow: 0 1px 3px hsl(220 20% 18% / 0.04);
-}
-
-/* Feature card - hover effect */
-.feature-card {
-  transition: all 0.2s ease;
-}
-
-.feature-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px -5px hsl(220 20% 18% / 0.08);
-}
-
 /* Section spacing utility */
 .section-spacing {
   padding: 5rem 0;
@@ -172,6 +148,70 @@
   .section-spacing {
     padding: 7rem 0;
   }
+}
+
+/* ========================
+   CLEAN UI UTILITIES
+   ======================== */
+
+/* Surgical spacing system (8px rhythm) */
+.space-8 { margin: 0.5rem; }
+.space-16 { margin: 1rem; }
+.space-24 { margin: 1.5rem; }
+.space-32 { margin: 2rem; }
+.space-40 { margin: 2.5rem; }
+.space-48 { margin: 3rem; }
+.space-64 { margin: 4rem; }
+.space-80 { margin: 5rem; }
+
+/* Precise borders */
+.border-light { border: 1px solid hsl(210 15% 90%); }
+.border-medium { border: 1px solid hsl(210 15% 85%); }
+
+/* Clean card style */
+.card-clean {
+  background: white;
+  border: 1px solid hsl(210 15% 85%);
+  border-radius: 1.5rem;
+  transition: border-color 0.2s ease;
+}
+
+.card-clean:hover {
+  border-color: hsl(210 15% 75%);
+}
+
+/* Selection color */
+::selection {
+  background: hsl(220 80% 60% / 0.2);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(210 15% 95%);
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(210 15% 75%);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(210 15% 65%);
+}
+
+/* Focus ring */
+.focus-ring {
+  outline: none;
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
 
 /* ========================
