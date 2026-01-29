@@ -12,7 +12,7 @@ import {
   AlertTriangle, CheckCircle, Clock, Car, Calendar,
   User, Fuel, Palette, Users, Banknote, Hash,
   Gauge, FileCheck, RefreshCw, Loader2, Pencil, Save, X, Sparkles,
-  Settings, ChevronLeft, Shield, ChevronRight, Info
+  Settings, ChevronLeft, Shield, ChevronRight, Info, Wrench
 } from "lucide-react";
 import { format, differenceInDays, isPast, formatDistanceToNow } from "date-fns";
 import {
@@ -36,6 +36,7 @@ import VerificationProgress from "@/components/vehicle/VerificationProgress";
 import ExpiryIntelligence from "@/components/vehicle/ExpiryIntelligence";
 import SellVehicleTab from "@/components/vehicle/SellVehicleTab";
 import ChallanTab from "@/components/vehicle/ChallanTab";
+import { RequestAssistanceDialog } from "@/components/assistance/RequestAssistanceDialog";
 import { logVehicleEvent } from "@/lib/vehicleHistory";
 import { calculateVerificationProgress } from "@/lib/verificationChecks";
 import { toTitleCase } from "@/lib/utils";
@@ -204,6 +205,9 @@ const VehicleDetails = () => {
   const [showUploadConsent, setShowUploadConsent] = useState(false);
   const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
   const [lastUploadedDocId, setLastUploadedDocId] = useState<string | null>(null);
+
+  // Assistance dialog state
+  const [showAssistanceDialog, setShowAssistanceDialog] = useState(false);
 
   // Refresh vehicle data hook
   const { isRefreshing, canRefresh, getTimeUntilRefresh, refreshVehicleData } = useRefreshVehicle({
@@ -663,6 +667,23 @@ const VehicleDetails = () => {
           
           {/* Quick Actions in Header */}
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAssistanceDialog(true)}
+              className="hidden sm:flex"
+            >
+              <Wrench className="h-4 w-4 mr-1" />
+              Assistance
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowAssistanceDialog(true)}
+              className="sm:hidden h-9 w-9"
+            >
+              <Wrench className="h-4 w-4" />
+            </Button>
             <TransferVehicleDialog
               vehicleId={vehicle.id}
               vehicleNumber={vehicle.registration_number}
@@ -1106,6 +1127,19 @@ const VehicleDetails = () => {
           setShowUploadConsent(open);
         }}
         onConfirm={processFileUpload}
+      />
+
+      {/* Request Assistance Dialog */}
+      <RequestAssistanceDialog
+        open={showAssistanceDialog}
+        onOpenChange={setShowAssistanceDialog}
+        vehicles={vehicle ? [{
+          id: vehicle.id,
+          registration_number: vehicle.registration_number,
+          maker_model: vehicle.maker_model,
+          manufacturer: vehicle.manufacturer,
+        }] : []}
+        preselectedVehicleId={vehicle?.id}
       />
     </div>
   );

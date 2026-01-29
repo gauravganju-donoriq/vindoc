@@ -11,7 +11,8 @@ const corsHeaders = {
 const VALID_ACTION_TYPES = [
   "overview", "users", "activity", "vehicles", "transfers", "claims", "listings",
   "suspend_user", "unsuspend_user", "set_vehicle_verification", "get_vehicle_for_claim",
-  "update_claim_status", "update_listing_status"
+  "update_claim_status", "update_listing_status",
+  "assistance_requests", "assign_assistance", "update_assistance_status"
 ] as const;
 
 // Input validation schemas
@@ -50,6 +51,21 @@ const UpdateListingStatusSchema = z.object({
   listingId: z.string().uuid("Invalid listing ID format"),
   status: z.enum(["approved", "rejected", "on_hold"]),
   adminNotes: z.string().max(1000).optional().nullable(),
+});
+
+const AssignAssistanceSchema = z.object({
+  type: z.literal("assign_assistance"),
+  requestId: z.string().uuid("Invalid request ID format"),
+  assignedTo: z.string().min(1, "Helper name is required").max(100),
+  assignedPhone: z.string().max(20).optional().nullable(),
+  adminNotes: z.string().max(500).optional().nullable(),
+});
+
+const UpdateAssistanceStatusSchema = z.object({
+  type: z.literal("update_assistance_status"),
+  requestId: z.string().uuid("Invalid request ID format"),
+  status: z.enum(["in_progress", "completed", "cancelled"]),
+  adminNotes: z.string().max(500).optional().nullable(),
 });
 
 // Standardized error response
@@ -621,6 +637,105 @@ Deno.serve(async (req) => {
         });
 
         responseData = { message: `Listing marked as ${newStatus}` };
+        break;
+      }
+
+      case "assistance_requests": {
+        const statusFilter = body?.status as string;
+        
+        let query = adminClient
+          .from("assistance_requests")
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(offset, offset + pageSize - 1);
+        
+        if (statusFilter && statusFilter !== "all") {
+          query = query.eq("status", statusFilter);
+        }
+        
+        const { data: requestsData, count } = await query;
+
+        const enrichedRequests = await Promise.all(
+          (requestsData || []).map(async (r: Record<string, unknown>) => {
+            const [userResult, vehicleResult] = await Promise.all([
+              adminClient.auth.admin.getUserById(r.user_id as string),
+              adminClient.from("vehicles").select("registration_number, maker_model").eq("id", r.vehicle_id as string).maybeSingle(),
+            ]);
+            return {
+              ...r,
+              userEmail: userResult.data?.user?.email || "Unknown",
+              registrationNumber: vehicleResult.data?.registration_number || "Deleted",
+              makerModel: vehicleResult.data?.maker_model || null,
+            };
+          })
+        );
+
+        responseData = { 
+          requests: enrichedRequests,
+          pagination: { page, pageSize, totalCount: count || 0, totalPages: Math.ceil((count || 0) / pageSize) }
+        };
+        break;
+      }
+
+      case "assign_assistance": {
+        const validation = AssignAssistanceSchema.safeParse(body);
+        if (!validation.success) {
+          return errorResponse(validation.error.errors[0]?.message || "Invalid input", 400, "VALIDATION_ERROR");
+        }
+
+        const { requestId, assignedTo, assignedPhone, adminNotes } = validation.data;
+
+        const { error: updateError } = await adminClient
+          .from("assistance_requests")
+          .update({
+            status: "assigned",
+            assigned_to: assignedTo,
+            assigned_phone: assignedPhone,
+            assigned_at: new Date().toISOString(),
+            admin_notes: adminNotes,
+          })
+          .eq("id", requestId);
+
+        if (updateError) {
+          console.error(`[${requestId}] Assign assistance error:`, updateError);
+          return errorResponse("Failed to assign helper", 500, "UPDATE_FAILED");
+        }
+
+        responseData = { message: "Helper assigned successfully" };
+        break;
+      }
+
+      case "update_assistance_status": {
+        const validation = UpdateAssistanceStatusSchema.safeParse(body);
+        if (!validation.success) {
+          return errorResponse(validation.error.errors[0]?.message || "Invalid input", 400, "VALIDATION_ERROR");
+        }
+
+        const { requestId, status: newStatus, adminNotes } = validation.data;
+
+        const updates: Record<string, unknown> = {
+          status: newStatus,
+        };
+
+        if (adminNotes) {
+          updates.admin_notes = adminNotes;
+        }
+
+        if (newStatus === "completed") {
+          updates.completed_at = new Date().toISOString();
+        }
+
+        const { error: updateError } = await adminClient
+          .from("assistance_requests")
+          .update(updates)
+          .eq("id", requestId);
+
+        if (updateError) {
+          console.error(`[${requestId}] Update assistance status error:`, updateError);
+          return errorResponse("Failed to update status", 500, "UPDATE_FAILED");
+        }
+
+        responseData = { message: `Request marked as ${newStatus}` };
         break;
       }
 

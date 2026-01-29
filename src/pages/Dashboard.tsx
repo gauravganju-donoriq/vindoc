@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Car, Plus, AlertTriangle, CheckCircle, Clock, Trash2, 
-  ShieldCheck, ChevronRight, MoreHorizontal, Calendar, Fuel
+  ShieldCheck, ChevronRight, MoreHorizontal, Calendar, Fuel, Wrench
 } from "lucide-react";
 import { format, differenceInDays, isPast } from "date-fns";
 import {
@@ -29,6 +29,8 @@ import {
 import PendingTransfers from "@/components/transfers/PendingTransfers";
 import { PendingOwnershipClaims } from "@/components/transfers/PendingOwnershipClaims";
 import ChallanSummaryWidget from "@/components/dashboard/ChallanSummaryWidget";
+import ActiveAssistanceCard from "@/components/dashboard/ActiveAssistanceCard";
+import { RequestAssistanceDialog } from "@/components/assistance/RequestAssistanceDialog";
 import { DashboardLayout, DashboardSkeleton } from "@/components/layout/DashboardLayout";
 import { toTitleCase } from "@/lib/utils";
 
@@ -297,6 +299,7 @@ const Dashboard = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | undefined>();
+  const [showAssistanceDialog, setShowAssistanceDialog] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -378,12 +381,24 @@ const Dashboard = () => {
       }
       actions={
         vehicles.length > 0 && (
-          <Button asChild className="rounded-full">
-            <Link to="/add-vehicle">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Vehicle
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              className="rounded-full"
+              onClick={() => setShowAssistanceDialog(true)}
+            >
+              <Wrench className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Request Assistance</span>
+              <span className="sm:hidden">Assist</span>
+            </Button>
+            <Button asChild className="rounded-full">
+              <Link to="/add-vehicle">
+                <Plus className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Add Vehicle</span>
+                <span className="sm:hidden">Add</span>
+              </Link>
+            </Button>
+          </div>
         )
       }
     >
@@ -395,6 +410,9 @@ const Dashboard = () => {
 
       {/* Challan Summary Widget */}
       <ChallanSummaryWidget vehicleIds={vehicles.map(v => v.id)} />
+
+      {/* Active Assistance Requests */}
+      <ActiveAssistanceCard vehicleIds={vehicles.map(v => v.id)} />
 
       {/* Vehicle Grid - 2 columns on xl+ */}
       {vehicles.length === 0 ? (
@@ -411,6 +429,18 @@ const Dashboard = () => {
           ))}
         </div>
       )}
+
+      {/* Request Assistance Dialog */}
+      <RequestAssistanceDialog
+        open={showAssistanceDialog}
+        onOpenChange={setShowAssistanceDialog}
+        vehicles={vehicles.map(v => ({
+          id: v.id,
+          registration_number: v.registration_number,
+          maker_model: v.maker_model,
+          manufacturer: v.manufacturer,
+        }))}
+      />
     </DashboardLayout>
   );
 };
