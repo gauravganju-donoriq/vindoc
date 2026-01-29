@@ -126,10 +126,27 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
 
-  /* Smooth typography rendering */
+  /* Smooth typography rendering and scrolling */
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
   }
+}
+
+/* Section spacing utility */
+.section-spacing {
+  padding: 5rem 0;
+}
+
+@media (min-width: 768px) {
+  .section-spacing {
+    padding: 7.5rem 0;
+  }
+}
+
+/* Hero gradient */
+.hero-gradient {
+  background: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 20% 98%) 100%);
 }
