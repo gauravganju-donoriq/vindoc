@@ -56,12 +56,32 @@ const ChallanCard = ({ challan, isStored = false }: { challan: ChallanData; isSt
   const [isOpen, setIsOpen] = useState(false);
   const isPending = challan.status === 'Pending';
 
-  // Parse date from "DD-MM-YYYY HH:mm:ss" format
-  const parseDate = (dateStr: string) => {
+  // Parse date from various formats (API: "DD-MM-YYYY HH:mm:ss" or DB: ISO string)
+  const parseDate = (dateStr: string): Date | null => {
+    if (!dateStr) return null;
+    
     try {
-      const [datePart, timePart] = dateStr.split(' ');
-      const [day, month, year] = datePart.split('-');
-      return new Date(`${year}-${month}-${day}T${timePart || '00:00:00'}`);
+      // First try parsing as ISO format (from database)
+      const isoDate = new Date(dateStr);
+      if (!isNaN(isoDate.getTime())) {
+        return isoDate;
+      }
+      
+      // Then try parsing "DD-MM-YYYY HH:mm:ss" format (from API)
+      if (dateStr.includes('-') && dateStr.length >= 10) {
+        const [datePart, timePart] = dateStr.split(' ');
+        const parts = datePart.split('-');
+        // Check if it's DD-MM-YYYY format (day first)
+        if (parts.length === 3 && parts[0].length <= 2) {
+          const [day, month, year] = parts;
+          const parsed = new Date(`${year}-${month}-${day}T${timePart || '00:00:00'}`);
+          if (!isNaN(parsed.getTime())) {
+            return parsed;
+          }
+        }
+      }
+      
+      return null;
     } catch {
       return null;
     }
