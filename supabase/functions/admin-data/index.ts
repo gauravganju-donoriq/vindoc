@@ -12,7 +12,8 @@ const VALID_ACTION_TYPES = [
   "overview", "users", "activity", "vehicles", "transfers", "claims", "listings",
   "suspend_user", "unsuspend_user", "set_vehicle_verification", "get_vehicle_for_claim",
   "update_claim_status", "update_listing_status",
-  "assistance_requests", "assign_assistance", "update_assistance_status"
+  "assistance_requests", "assign_assistance", "update_assistance_status",
+  "parts_requests", "update_parts_request"
 ] as const;
 
 // Input validation schemas
@@ -65,6 +66,16 @@ const UpdateAssistanceStatusSchema = z.object({
   type: z.literal("update_assistance_status"),
   requestId: z.string().uuid("Invalid request ID format"),
   status: z.enum(["in_progress", "completed", "cancelled"]),
+  adminNotes: z.string().max(500).optional().nullable(),
+});
+
+const UpdatePartsRequestSchema = z.object({
+  type: z.literal("update_parts_request"),
+  requestId: z.string().uuid("Invalid request ID format"),
+  status: z.enum(["sourcing", "quoted", "confirmed", "delivered", "cancelled"]).optional(),
+  quotedPrice: z.number().positive().optional().nullable(),
+  vendorInfo: z.string().max(500).optional().nullable(),
+  estimatedDelivery: z.string().optional().nullable(),
   adminNotes: z.string().max(500).optional().nullable(),
 });
 
@@ -736,6 +747,87 @@ Deno.serve(async (req) => {
         }
 
         responseData = { message: `Request marked as ${newStatus}` };
+        break;
+      }
+
+      case "parts_requests": {
+        const statusFilter = body?.status as string;
+        
+        let query = adminClient
+          .from("parts_requests")
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(offset, offset + pageSize - 1);
+        
+        if (statusFilter && statusFilter !== "all") {
+          query = query.eq("status", statusFilter);
+        }
+        
+        const { data: requestsData, count } = await query;
+
+        const enrichedRequests = await Promise.all(
+          (requestsData || []).map(async (r: Record<string, unknown>) => {
+            const [userResult, vehicleResult] = await Promise.all([
+              adminClient.auth.admin.getUserById(r.user_id as string),
+              adminClient.from("vehicles").select("registration_number, maker_model").eq("id", r.vehicle_id as string).maybeSingle(),
+            ]);
+            return {
+              ...r,
+              userEmail: userResult.data?.user?.email || "Unknown",
+              registrationNumber: vehicleResult.data?.registration_number || "Deleted",
+              makerModel: vehicleResult.data?.maker_model || null,
+            };
+          })
+        );
+
+        responseData = { 
+          requests: enrichedRequests,
+          pagination: { page, pageSize, totalCount: count || 0, totalPages: Math.ceil((count || 0) / pageSize) }
+        };
+        break;
+      }
+
+      case "update_parts_request": {
+        const validation = UpdatePartsRequestSchema.safeParse(body);
+        if (!validation.success) {
+          return errorResponse(validation.error.errors[0]?.message || "Invalid input", 400, "VALIDATION_ERROR");
+        }
+
+        const { requestId, status: newStatus, quotedPrice, vendorInfo, estimatedDelivery, adminNotes } = validation.data;
+
+        const updates: Record<string, unknown> = {};
+        
+        if (newStatus) {
+          updates.status = newStatus;
+        }
+        if (quotedPrice !== undefined) {
+          updates.quoted_price = quotedPrice;
+        }
+        if (vendorInfo !== undefined) {
+          updates.vendor_info = vendorInfo;
+        }
+        if (estimatedDelivery !== undefined) {
+          updates.estimated_delivery = estimatedDelivery;
+        }
+        if (adminNotes !== undefined) {
+          updates.admin_notes = adminNotes;
+        }
+
+        if (Object.keys(updates).length === 0) {
+          return errorResponse("No updates provided", 400, "NO_UPDATES");
+        }
+
+        const { error: updateError } = await adminClient
+          .from("parts_requests")
+          .update(updates)
+          .eq("id", requestId);
+
+        if (updateError) {
+          console.error(`[${requestId}] Update parts request error:`, updateError);
+          return errorResponse("Failed to update request", 500, "UPDATE_FAILED");
+        }
+
+        responseData = { message: newStatus ? `Request marked as ${newStatus}` : "Request updated" };
         break;
       }
 

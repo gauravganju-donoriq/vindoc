@@ -214,6 +214,71 @@ export type Database = {
           },
         ]
       }
+      parts_requests: {
+        Row: {
+          admin_notes: string | null
+          condition_preference: string
+          created_at: string
+          description: string | null
+          estimated_delivery: string | null
+          id: string
+          part_category: string
+          part_name: string
+          quantity: number
+          quoted_price: number | null
+          status: string
+          updated_at: string
+          urgency: string
+          user_id: string
+          vehicle_id: string
+          vendor_info: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          condition_preference?: string
+          created_at?: string
+          description?: string | null
+          estimated_delivery?: string | null
+          id?: string
+          part_category?: string
+          part_name: string
+          quantity?: number
+          quoted_price?: number | null
+          status?: string
+          updated_at?: string
+          urgency?: string
+          user_id: string
+          vehicle_id: string
+          vendor_info?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          condition_preference?: string
+          created_at?: string
+          description?: string | null
+          estimated_delivery?: string | null
+          id?: string
+          part_category?: string
+          part_name?: string
+          quantity?: number
+          quoted_price?: number | null
+          status?: string
+          updated_at?: string
+          urgency?: string
+          user_id?: string
+          vehicle_id?: string
+          vendor_info?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parts_requests_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string | null
