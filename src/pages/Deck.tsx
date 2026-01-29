@@ -34,7 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 // Access code for the presentation
-const ACCESS_CODE = "vindoc46amg";
+const ACCESS_CODE = "vindoc2026";
 
 // Password Gate Component
 const PasswordGate = ({ onAccessGranted }: { onAccessGranted: () => void }) => {
