@@ -1,171 +1,130 @@
 
-# Plan: Challan (Traffic Violation) Check Feature
+
+# Plan: Roadside Assistance Request Feature
 
 ## Overview
 
-Add a new "Challan" tab to the Vehicle Details page that fetches and displays traffic violation (challan) data for a vehicle using the RTO Challan Details API from RapidAPI. Users can check pending and disposed challans, view details, and save the history.
+Add a feature that allows users to request roadside assistance from their Dashboard or Vehicle Details page. The request includes vehicle details (registration, model, location) so the admin and assigned helper know exactly which car to assist. Admins can view all requests, assign helpers, and track status.
 
 ---
 
-## Architecture
+## User Flow
 
 ```text
-+-------------------+     +-------------------------+     +---------------------------+
-|   Vehicle Page    | --> |   fetch-challan-details | --> | RTO Challan API (RapidAPI)|
-|   (Challan Tab)   |     |   Edge Function         |     |                           |
-+-------------------+     +-------------------------+     +---------------------------+
-         |                           |
-         v                           v
-+-------------------+     +-------------------------+
-|   ChallanTab.tsx  |     |   vehicle_challans      |
-|   Component       |     |   (new table)           |
-+-------------------+     +-------------------------+
++-------------------+     +-------------------------+     +-------------------+
+|   User Dashboard  | --> |   Request Assistance    | --> | Admin Dashboard   |
+|   or Vehicle Page |     |   Form (with vehicle)   |     | (new tab)         |
++-------------------+     +-------------------------+     +-------------------+
+         |                           |                           |
+         v                           v                           v
++-------------------+     +-------------------------+     +-------------------+
+|   View Request    |     |   assistance_requests   |     |   Assign Helper   |
+|   Status Card     |     |   (new table)           |     |   & Update Status |
++-------------------+     +-------------------------+     +-------------------+
 ```
 
 ---
 
 ## Database Schema
 
-### New Table: `vehicle_challans`
+### New Table: `assistance_requests`
 
-This table stores fetched challan data for each vehicle to avoid repeated API calls and provide history.
+Stores all roadside assistance requests with vehicle context and status tracking.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | id | uuid | Primary key |
-| vehicle_id | uuid | FK to vehicles |
-| user_id | uuid | Owner's user ID |
-| challan_no | text | Unique challan number |
-| challan_date_time | timestamptz | When violation occurred |
-| challan_place | text | Location of violation |
-| challan_status | text | 'Pending' or 'Disposed' |
-| remark | text | Description of violation |
-| fine_imposed | numeric | Fine amount |
-| driver_name | text | Driver name (if available) |
-| owner_name | text | Owner name (masked from API) |
-| department | text | e.g., 'Traffic' |
-| state_code | text | e.g., 'MH' |
-| offence_details | jsonb | Array of offence objects |
-| sent_to_court | boolean | If sent to court |
-| court_details | jsonb | Court info if applicable |
-| raw_api_data | jsonb | Full API response for reference |
-| fetched_at | timestamptz | When data was fetched |
-| created_at | timestamptz | Record creation time |
-
-**Unique Constraint**: (vehicle_id, challan_no) - prevents duplicate entries
+| user_id | uuid | Requester's user ID |
+| vehicle_id | uuid | FK to vehicles (for details) |
+| request_type | text | Type: 'breakdown', 'flat_tire', 'battery', 'fuel', 'accident', 'other' |
+| description | text | User's description of the issue |
+| location_text | text | User-provided location description |
+| location_lat | numeric | Optional GPS latitude |
+| location_lng | numeric | Optional GPS longitude |
+| urgency | text | 'low', 'medium', 'high', 'emergency' |
+| status | text | 'pending', 'assigned', 'in_progress', 'completed', 'cancelled' |
+| assigned_to | text | Helper name/contact (admin fills this) |
+| assigned_at | timestamptz | When helper was assigned |
+| admin_notes | text | Internal admin notes |
+| completed_at | timestamptz | When request was resolved |
+| created_at | timestamptz | Request creation time |
+| updated_at | timestamptz | Last update time |
 
 ### RLS Policies
 
-- Users can SELECT their own challans (user_id = auth.uid())
-- Users can INSERT their own challans (user_id = auth.uid())
-- Users can UPDATE their own challans (user_id = auth.uid())
-- Users can DELETE their own challans (user_id = auth.uid())
-
----
-
-## Edge Function: `fetch-challan-details`
-
-A new edge function that:
-
-1. **Authenticates** using JWT (same pattern as fetch-vehicle-details)
-2. **Validates input** (registration number via Zod)
-3. **Calls RapidAPI** endpoint with required consent parameters
-4. **Returns structured data** for pending and disposed challans
-5. **Handles errors** gracefully with meaningful messages
-
-### API Details
-
-- **Endpoint**: `https://rto-challan-details-api.p.rapidapi.com/api/v1/challan`
-- **Method**: POST
-- **Uses existing secret**: `RAPIDAPI_KEY` (already configured)
-- **Request body**:
-  ```json
-  {
-    "reg_no": "MH14GH8765",
-    "consent": "Y",
-    "consent_text": "I hereby declare my consent..."
-  }
-  ```
-
-### Response Mapping
-
-```typescript
-interface ChallanData {
-  challanNo: string;
-  dateTime: string;
-  place: string;
-  status: 'Pending' | 'Disposed';
-  remark: string;
-  fineImposed: number;
-  driverName: string | null;
-  ownerName: string;
-  department: string;
-  stateCode: string;
-  offences: Array<{ act: string | null; name: string }>;
-  sentToCourt: boolean;
-  courtDetails: {
-    address: string | null;
-    name: string | null;
-    dateOfProceeding: string | null;
-  } | null;
-}
-```
+- Users can INSERT their own requests (user_id = auth.uid())
+- Users can SELECT their own requests (user_id = auth.uid())
+- Users can UPDATE (cancel) their own pending requests
+- Super admins can SELECT, UPDATE all requests (via has_role function)
 
 ---
 
 ## Frontend Components
 
-### 1. ChallanTab Component (`src/components/vehicle/ChallanTab.tsx`)
+### 1. Request Assistance Dialog (`src/components/assistance/RequestAssistanceDialog.tsx`)
 
-Main component for the Challan tab with:
+A dialog/modal that allows users to submit an assistance request:
 
-- **Check Challans Button**: Triggers API call via edge function
-- **Loading State**: Skeleton loader during fetch
-- **Summary Cards**:
-  - Total pending challans count
-  - Total fine amount pending
-  - Total disposed challans
-- **Challan List**: Cards for each challan showing:
-  - Challan number
-  - Date and location
-  - Violation description
-  - Fine amount with status badge (Pending/Paid)
-  - Offence details in expandable section
-- **Empty State**: When no challans found (good message!)
-- **Last Fetched Info**: When data was last updated
+- **Vehicle Selection**: Dropdown to choose which vehicle needs help (pre-selected if from Vehicle Details page)
+- **Request Type**: Dropdown with options (Breakdown, Flat Tire, Battery Issue, Out of Fuel, Accident, Other)
+- **Urgency Level**: Radio buttons (Low, Medium, High, Emergency)
+- **Location**: Text input for location description
+- **Description**: Textarea for additional details
+- **Submit Button**: Creates the request and shows confirmation
 
-### 2. UI Layout
+### 2. Active Assistance Card (`src/components/dashboard/ActiveAssistanceCard.tsx`)
 
-```text
-+------------------------------------------+
-|  CHALLAN TAB                             |
-+------------------------------------------+
-|  [Check for Challans]  Last checked: 2h  |
-+------------------------------------------+
-|                                          |
-|  +----------------+  +----------------+  |
-|  | Pending: 2     |  | Total Fine:    |  |
-|  | challans       |  | Rs. 4,000      |  |
-|  +----------------+  +----------------+  |
-|                                          |
-|  PENDING CHALLANS                        |
-|  +--------------------------------------+|
-|  | Challan #MH4183995241201014444596   ||
-|  | Dec 01, 2024 - Nashik City          ||
-|  | Speed violating by driver...        ||
-|  | Fine: Rs. 2,000        [PENDING]    ||
-|  +--------------------------------------+|
-|                                          |
-|  DISPOSED CHALLANS                       |
-|  (none found - Great driving record!)   |
-+------------------------------------------+
-```
+A card on the Dashboard showing active assistance requests:
 
-### 3. Integration in VehicleDetails.tsx
+- Status badge (Pending, Assigned, In Progress)
+- Vehicle info (registration, model)
+- Request type and urgency
+- Assigned helper name (if assigned)
+- Cancel button (for pending requests)
+- Auto-hides when no active requests
 
-- Add new TabsTrigger for "Challan" tab
-- Add TabsContent with ChallanTab component
-- Pass vehicle data to the component
+### 3. Admin Assistance Tab (`src/components/admin/AdminAssistance.tsx`)
+
+New tab in Admin Dashboard to manage all requests:
+
+- **Pending Requests Alert**: Highlighted card showing count of pending requests
+- **Requests Table**: All requests with filters (status, urgency, date)
+  - Columns: Vehicle, User, Type, Urgency, Location, Status, Created, Actions
+- **Assign Dialog**: Modal to assign a helper (name, phone, notes)
+- **Status Update**: Quick actions to change status (In Progress, Completed)
+- **View Details**: Expandable row with full description and history
+
+### 4. Integration Points
+
+**Dashboard.tsx:**
+- Add "Request Assistance" button in header area
+- Add ActiveAssistanceCard component below ChallanSummaryWidget
+
+**VehicleDetails.tsx:**
+- Add "Request Assistance" button in vehicle header
+- Pre-select the current vehicle when opening the dialog
+
+**Admin.tsx:**
+- Add new "Assistance" tab between "Claims" and "Voice"
+
+---
+
+## Edge Function Updates
+
+### Extend `admin-data/index.ts`
+
+Add new action types to handle assistance requests:
+
+1. **"assistance_requests"**: Fetch all assistance requests (paginated, with user/vehicle enrichment)
+2. **"assign_assistance"**: Assign a helper to a request
+3. **"update_assistance_status"**: Update request status
+
+### New Edge Function: `send-assistance-notification/index.ts`
+
+Email notification function for:
+- Notifying admin when new request is created
+- Notifying user when helper is assigned
+- Uses existing Resend integration
 
 ---
 
@@ -173,161 +132,211 @@ Main component for the Challan tab with:
 
 | File | Action | Description |
 |------|--------|-------------|
-| `supabase/functions/fetch-challan-details/index.ts` | Create | Edge function for RapidAPI call |
-| `supabase/config.toml` | Update | Add function config |
-| `src/components/vehicle/ChallanTab.tsx` | Create | Main challan tab component |
-| `src/pages/VehicleDetails.tsx` | Update | Add Challan tab |
-| Database migration | Create | New vehicle_challans table |
-
----
-
-## Detailed Implementation
-
-### 1. Edge Function (`supabase/functions/fetch-challan-details/index.ts`)
-
-```typescript
-// Key structure:
-// - CORS headers (standard)
-// - JWT authentication via getClaims()
-// - Zod validation for registration number
-// - POST to RapidAPI with consent
-// - Map response to structured format
-// - Return pending_challans and disposed_challans arrays
-// - 10 second timeout with AbortController
-```
-
-### 2. ChallanTab Component Structure
-
-```typescript
-interface ChallanTabProps {
-  vehicle: {
-    id: string;
-    registration_number: string;
-  };
-}
-
-// States:
-// - challans: ChallanData[]
-// - isLoading: boolean
-// - lastFetched: Date | null
-// - error: string | null
-
-// Functions:
-// - fetchChallans(): Call edge function
-// - saveChallans(): Save to database
-// - calculateTotalFine(): Sum pending fines
-```
-
-### 3. VehicleDetails.tsx Updates
-
-Add between "Activity" and "Sell" tabs:
-
-```tsx
-<TabsTrigger value="challan" className="rounded-lg data-[state=active]:bg-gray-900 data-[state=active]:text-white">
-  Challan
-</TabsTrigger>
-
-// And corresponding content:
-<TabsContent value="challan" className="mt-0">
-  <ChallanTab vehicle={vehicle} />
-</TabsContent>
-```
+| Database migration | Create | New `assistance_requests` table with RLS |
+| `supabase/functions/admin-data/index.ts` | Update | Add assistance request handling |
+| `supabase/functions/send-assistance-notification/index.ts` | Create | Email notifications |
+| `supabase/config.toml` | Update | Add new function config |
+| `src/components/assistance/RequestAssistanceDialog.tsx` | Create | User request form |
+| `src/components/dashboard/ActiveAssistanceCard.tsx` | Create | Dashboard status card |
+| `src/components/admin/AdminAssistance.tsx` | Create | Admin management tab |
+| `src/pages/Dashboard.tsx` | Update | Add button and status card |
+| `src/pages/VehicleDetails.tsx` | Update | Add assistance button |
+| `src/pages/Admin.tsx` | Update | Add Assistance tab |
 
 ---
 
 ## Database Migration SQL
 
 ```sql
--- Create vehicle_challans table
-CREATE TABLE IF NOT EXISTS public.vehicle_challans (
+-- Create assistance request type enum
+CREATE TYPE public.assistance_request_type AS ENUM (
+  'breakdown', 'flat_tire', 'battery', 'fuel', 'accident', 'towing', 'lockout', 'other'
+);
+
+CREATE TYPE public.assistance_urgency AS ENUM (
+  'low', 'medium', 'high', 'emergency'
+);
+
+CREATE TYPE public.assistance_status AS ENUM (
+  'pending', 'assigned', 'in_progress', 'completed', 'cancelled'
+);
+
+-- Create assistance_requests table
+CREATE TABLE IF NOT EXISTS public.assistance_requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  vehicle_id uuid NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
   user_id uuid NOT NULL,
-  challan_no text NOT NULL,
-  challan_date_time timestamptz,
-  challan_place text,
-  challan_status text NOT NULL DEFAULT 'Pending',
-  remark text,
-  fine_imposed numeric,
-  driver_name text,
-  owner_name text,
-  department text,
-  state_code text,
-  offence_details jsonb DEFAULT '[]'::jsonb,
-  sent_to_court boolean DEFAULT false,
-  court_details jsonb,
-  raw_api_data jsonb,
-  fetched_at timestamptz NOT NULL DEFAULT now(),
+  vehicle_id uuid NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+  request_type text NOT NULL DEFAULT 'other',
+  description text,
+  location_text text NOT NULL,
+  location_lat numeric,
+  location_lng numeric,
+  urgency text NOT NULL DEFAULT 'medium',
+  status text NOT NULL DEFAULT 'pending',
+  assigned_to text,
+  assigned_phone text,
+  assigned_at timestamptz,
+  admin_notes text,
+  completed_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE(vehicle_id, challan_no)
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 -- Enable RLS
-ALTER TABLE public.vehicle_challans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.assistance_requests ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
-CREATE POLICY "Users can view their own challans"
-  ON public.vehicle_challans FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own challans"
-  ON public.vehicle_challans FOR INSERT
+CREATE POLICY "Users can create their own assistance requests"
+  ON public.assistance_requests FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can update their own challans"
-  ON public.vehicle_challans FOR UPDATE
+CREATE POLICY "Users can view their own assistance requests"
+  ON public.assistance_requests FOR SELECT
   USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can delete their own challans"
-  ON public.vehicle_challans FOR DELETE
-  USING (auth.uid() = user_id);
+CREATE POLICY "Users can cancel their pending requests"
+  ON public.assistance_requests FOR UPDATE
+  USING (auth.uid() = user_id AND status = 'pending')
+  WITH CHECK (status = 'cancelled');
+
+CREATE POLICY "Super admins can view all assistance requests"
+  ON public.assistance_requests FOR SELECT
+  USING (has_role(auth.uid(), 'super_admin'));
+
+CREATE POLICY "Super admins can update assistance requests"
+  ON public.assistance_requests FOR UPDATE
+  USING (has_role(auth.uid(), 'super_admin'));
 
 -- Add updated_at trigger
-CREATE TRIGGER update_vehicle_challans_updated_at
-  BEFORE UPDATE ON public.vehicle_challans
+CREATE TRIGGER update_assistance_requests_updated_at
+  BEFORE UPDATE ON public.assistance_requests
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
--- Index for faster lookups
-CREATE INDEX idx_vehicle_challans_vehicle_id ON public.vehicle_challans(vehicle_id);
-CREATE INDEX idx_vehicle_challans_user_id ON public.vehicle_challans(user_id);
+-- Indexes for faster queries
+CREATE INDEX idx_assistance_requests_user_id ON public.assistance_requests(user_id);
+CREATE INDEX idx_assistance_requests_vehicle_id ON public.assistance_requests(vehicle_id);
+CREATE INDEX idx_assistance_requests_status ON public.assistance_requests(status);
+CREATE INDEX idx_assistance_requests_created_at ON public.assistance_requests(created_at DESC);
 ```
 
 ---
 
-## API Key
+## UI Mockups
 
-The feature will use the **existing RAPIDAPI_KEY** secret that is already configured for the vehicle details API. No new secrets needed.
+### Request Assistance Dialog
+
+```text
++------------------------------------------+
+|  Request Roadside Assistance       [X]   |
++------------------------------------------+
+|                                          |
+|  Vehicle:                                |
+|  [Dropdown: KL01AY7070 - BMW 320D    v]  |
+|                                          |
+|  What's the issue?                       |
+|  [Dropdown: Flat Tire                 v]  |
+|                                          |
+|  Urgency:                                |
+|  ( ) Low  (*) Medium  ( ) High  ( ) Urgent|
+|                                          |
+|  Your Location:                          |
+|  [Enter your current location          ]  |
+|                                          |
+|  Additional Details:                     |
+|  [                                     ] |
+|  [Describe the problem...              ] |
+|  [                                     ] |
+|                                          |
+|                    [Cancel] [Request Help]|
++------------------------------------------+
+```
+
+### Active Assistance Card (Dashboard)
+
+```text
++------------------------------------------+
+|  ACTIVE ASSISTANCE REQUEST               |
++------------------------------------------+
+|  +--------------------------------------+|
+|  | KL01AY7070 - BMW 320D    [ASSIGNED]  ||
+|  | Flat Tire - High Urgency             ||
+|  | Location: MG Road, Kochi             ||
+|  |                                      ||
+|  | Helper: John (9876543210)            ||
+|  | Assigned 15 min ago                  ||
+|  +--------------------------------------+|
++------------------------------------------+
+```
+
+### Admin Assistance Tab
+
+```text
++------------------------------------------+
+|  [!] 3 Pending Requests                  |
++------------------------------------------+
+|  Vehicle     | User  | Type | Urgency | Status  | Actions     |
+|  ------------|-------|------|---------|---------|-------------|
+|  KL01AY7070  | user1 | Tire | High    | Pending | [Assign]    |
+|  MH14GH8765  | user2 | Fuel | Medium  | Assigned| [Complete]  |
+|  KA05XY1234  | user3 | Tow  | Emergency| InProg | [View]      |
++------------------------------------------+
+```
+
+---
+
+## Admin Edge Function Updates
+
+Add to `VALID_ACTION_TYPES`:
+- "assistance_requests"
+- "assign_assistance"
+- "update_assistance_status"
+
+Add validation schemas:
+```typescript
+const AssignAssistanceSchema = z.object({
+  type: z.literal("assign_assistance"),
+  requestId: z.string().uuid(),
+  assignedTo: z.string().min(1).max(100),
+  assignedPhone: z.string().max(20).optional(),
+  adminNotes: z.string().max(500).optional(),
+});
+
+const UpdateAssistanceStatusSchema = z.object({
+  type: z.literal("update_assistance_status"),
+  requestId: z.string().uuid(),
+  status: z.enum(["in_progress", "completed", "cancelled"]),
+  adminNotes: z.string().max(500).optional(),
+});
+```
+
+---
+
+## Notification Flow
+
+1. **User creates request**: Edge function sends email to admin (or configurable email list)
+2. **Admin assigns helper**: Notification sent to user with helper details
+3. **Request completed**: Confirmation email to user
 
 ---
 
 ## Security Considerations
 
-1. **Authentication**: JWT validation required before API call
-2. **Authorization**: Users can only fetch challans for their own vehicles
-3. **Input Validation**: Registration number validated via Zod
-4. **Consent**: Required consent text sent with each API request
-5. **RLS Policies**: Database access restricted to vehicle owner
-6. **No Sensitive Logging**: Challan details not logged to console in production
+1. **Authentication**: All endpoints require JWT verification
+2. **Authorization**: Users can only see/modify their own requests; admins use has_role() check
+3. **Input Validation**: All inputs validated via Zod schemas
+4. **RLS Policies**: Database-level access control as additional security layer
+5. **Rate Limiting**: Consider adding rate limit on request creation (e.g., max 5 pending requests per user)
 
 ---
 
-## Error Handling
+## Future Enhancements (Not in Initial Scope)
 
-| Scenario | User Message |
-|----------|--------------|
-| No challans found | "No challans found. Great driving record!" |
-| API timeout | "Request timed out. Please try again." |
-| Invalid registration | "Invalid registration number format" |
-| API error | "Could not fetch challan details. Try again later." |
-| Not authenticated | Redirect to login |
+- Real-time GPS location sharing
+- In-app chat between user and helper
+- Push notifications
+- Helper mobile app
+- Request rating/feedback system
+- Automated helper dispatch based on location
+- Payment integration for assistance services
 
----
-
-## Future Enhancements (Not in Scope)
-
-- Push notifications for new challans
-- Payment integration for challan payment
-- Challan history trends and analytics
-- Bulk check for all vehicles
