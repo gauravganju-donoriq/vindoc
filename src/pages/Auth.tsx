@@ -98,7 +98,7 @@ const Auth = () => {
         if (error) throw error;
         toast({
           title: "Account created!",
-          description: "Welcome to Valt.",
+          description: "Welcome to VinDoc!",
         });
       }
     } catch (error: any) {
@@ -125,11 +125,11 @@ const Auth = () => {
               <Shield className="h-8 w-8 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl">Valt</CardTitle>
+          <CardTitle className="text-2xl">VinDoc</CardTitle>
           <CardDescription>
             {isLogin
-              ? "Sign in to your secure vault"
-              : "Create your secure vault"}
+              ? "Sign in to your account"
+              : "Create your account"}
           </CardDescription>
         </CardHeader>
         <CardContent>
