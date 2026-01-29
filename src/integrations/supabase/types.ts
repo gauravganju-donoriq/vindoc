@@ -286,6 +286,83 @@ export type Database = {
         }
         Relationships: []
       }
+      vehicle_challans: {
+        Row: {
+          challan_date_time: string | null
+          challan_no: string
+          challan_place: string | null
+          challan_status: string
+          court_details: Json | null
+          created_at: string
+          department: string | null
+          driver_name: string | null
+          fetched_at: string
+          fine_imposed: number | null
+          id: string
+          offence_details: Json | null
+          owner_name: string | null
+          raw_api_data: Json | null
+          remark: string | null
+          sent_to_court: boolean | null
+          state_code: string | null
+          updated_at: string
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          challan_date_time?: string | null
+          challan_no: string
+          challan_place?: string | null
+          challan_status?: string
+          court_details?: Json | null
+          created_at?: string
+          department?: string | null
+          driver_name?: string | null
+          fetched_at?: string
+          fine_imposed?: number | null
+          id?: string
+          offence_details?: Json | null
+          owner_name?: string | null
+          raw_api_data?: Json | null
+          remark?: string | null
+          sent_to_court?: boolean | null
+          state_code?: string | null
+          updated_at?: string
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          challan_date_time?: string | null
+          challan_no?: string
+          challan_place?: string | null
+          challan_status?: string
+          court_details?: Json | null
+          created_at?: string
+          department?: string | null
+          driver_name?: string | null
+          fetched_at?: string
+          fine_imposed?: number | null
+          id?: string
+          offence_details?: Json | null
+          owner_name?: string | null
+          raw_api_data?: Json | null
+          remark?: string | null
+          sent_to_court?: boolean | null
+          state_code?: string | null
+          updated_at?: string
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_challans_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_history: {
         Row: {
           created_at: string
