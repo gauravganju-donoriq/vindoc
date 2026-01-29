@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { FileText, Bell, Car, Store, UserCheck, ShieldCheck } from "lucide-react";
+import { FileText, Bell, Car, Store, UserCheck, ShieldCheck, LifeBuoy, Wrench } from "lucide-react";
 import { FadeInView } from "./animations";
 
 interface Feature {
@@ -15,14 +15,22 @@ interface Feature {
 
 const features: Feature[] = [
   {
-    icon: Store,
-    title: "Sell Direct — No Agents",
-    description: "List your vehicle directly to the VinDoc community. Skip the middlemen, avoid agent fees, and connect with verified buyers.",
-    className: "md:col-span-2 md:row-span-1",
+    icon: LifeBuoy,
+    title: "Help When You Need It",
+    description: "Stranded on the road? Request roadside assistance and get connected to verified help in minutes.",
+    className: "md:col-span-1",
     iconBg: "",
     iconColor: "text-gray-900",
-    animation: "none",
-    badge: "Coming Soon"
+    animation: "none"
+  },
+  {
+    icon: Wrench,
+    title: "Find Parts, Skip the Hassle",
+    description: "Need a spare part? Request used or OEM parts and get quotes delivered to you. No dealer runs.",
+    className: "md:col-span-1",
+    iconBg: "",
+    iconColor: "text-gray-900",
+    animation: "none"
   },
   {
     icon: FileText,
@@ -43,6 +51,15 @@ const features: Feature[] = [
     animation: "none"
   },
   {
+    icon: Car,
+    title: "Vehicle Profiles",
+    description: "Create profiles for all your vehicles with complete document history.",
+    className: "md:col-span-1",
+    iconBg: "",
+    iconColor: "text-gray-900",
+    animation: "none"
+  },
+  {
     icon: UserCheck,
     title: "Expert Inspections",
     description: "Hire a VinDoc-certified expert to inspect any vehicle before you buy. Peace of mind for a small fee.",
@@ -53,19 +70,20 @@ const features: Feature[] = [
     badge: "Coming Soon"
   },
   {
-    icon: Car,
-    title: "Vehicle Profiles",
-    description: "Create profiles for all your vehicles with complete document history.",
-    className: "md:col-span-1",
+    icon: Store,
+    title: "Sell Direct, No Agents",
+    description: "List your vehicle directly to the VinDoc community. Skip the middlemen and connect with verified buyers.",
+    className: "md:col-span-2",
     iconBg: "",
     iconColor: "text-gray-900",
-    animation: "none"
+    animation: "none",
+    badge: "Coming Soon"
   },
   {
     icon: ShieldCheck,
     title: "Verified Seller Status",
     description: "Build trust with complete document verification. Stand out from other sellers with your verified badge.",
-    className: "md:col-span-2",
+    className: "md:col-span-1",
     iconBg: "",
     iconColor: "text-gray-900",
     animation: "none",
