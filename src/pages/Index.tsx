@@ -91,7 +91,7 @@ const Index = () => {
         <div className="container mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <Shield className="h-6 w-6 text-primary" />
-            <span className="text-xl font-semibold text-foreground">Valt</span>
+            <span className="text-xl font-semibold text-foreground">VinDoc</span>
           </Link>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" asChild>
@@ -170,7 +170,7 @@ const Index = () => {
             </h2>
             <div className="w-16 h-1 bg-primary mx-auto mb-8 rounded-full" />
             <p className="text-lg text-muted-foreground leading-relaxed">
-              Valt keeps all your vehicle documents in one secure place — and reminds you before anything expires.
+              VinDoc keeps all your vehicle documents in one secure place — and reminds you before anything expires.
               No more scrambling. No more surprises.
             </p>
           </div>
@@ -302,7 +302,7 @@ const Index = () => {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" />
-              <span className="font-semibold text-foreground">Valt</span>
+              <span className="font-semibold text-foreground">VinDoc</span>
             </div>
             <p className="text-sm text-muted-foreground">
               © 2026 · Made in India

@@ -77,7 +77,7 @@ const StyleGuide = () => {
               <Shield className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-semibold text-lg">Valt</h1>
+              <h1 className="font-semibold text-lg">VinDoc</h1>
               <p className="text-xs text-muted-foreground">Design System & Style Guide</p>
             </div>
           </div>
@@ -98,8 +98,8 @@ const StyleGuide = () => {
                   <Shield className="h-10 w-10 text-primary-foreground" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold">Valt</h3>
-                  <p className="text-muted-foreground">Your secure vault for vehicle documents, service records, and ownership transfers</p>
+                  <h3 className="text-xl font-semibold">VinDoc</h3>
+                  <p className="text-muted-foreground">AI-powered vehicle document management for Indian vehicle owners</p>
                 </div>
               </div>
             </CardContent>
