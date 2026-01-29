@@ -14,6 +14,74 @@ export type Database = {
   }
   public: {
     Tables: {
+      assistance_requests: {
+        Row: {
+          admin_notes: string | null
+          assigned_at: string | null
+          assigned_phone: string | null
+          assigned_to: string | null
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          id: string
+          location_lat: number | null
+          location_lng: number | null
+          location_text: string
+          request_type: string
+          status: string
+          updated_at: string
+          urgency: string
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          assigned_at?: string | null
+          assigned_phone?: string | null
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          location_lat?: number | null
+          location_lng?: number | null
+          location_text: string
+          request_type?: string
+          status?: string
+          updated_at?: string
+          urgency?: string
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          assigned_at?: string | null
+          assigned_phone?: string | null
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          location_lat?: number | null
+          location_lng?: number | null
+          location_text?: string
+          request_type?: string
+          status?: string
+          updated_at?: string
+          urgency?: string
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistance_requests_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           document_name: string
