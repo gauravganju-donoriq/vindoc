@@ -13,6 +13,8 @@ import {
   Lock, 
   MapPin, 
   Smartphone,
+  Sparkles,
+  Tag,
   AlertTriangle,
   Search,
   Clock
@@ -57,12 +59,16 @@ const Index = () => {
       <section className="section-spacing hero-gradient">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6 leading-tight">
-              Never miss a vehicle document renewal again
-            </h1>
-            <p className="text-xl text-muted-foreground mb-10 leading-relaxed">
-              One secure place for all your vehicle documents, with smart reminders that actually work.
-            </p>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
+            <Sparkles className="h-4 w-4" />
+            AI-Powered Platform
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6 leading-tight">
+            Never miss a vehicle document renewal again
+          </h1>
+          <p className="text-xl text-muted-foreground mb-10 leading-relaxed">
+            One secure place for all your vehicle documents, with AI-powered reminders and smart automation.
+          </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" asChild className="text-base px-8">
                 <Link to="/auth">Get Started Free</Link>
@@ -133,14 +139,17 @@ const Index = () => {
               Everything your vehicle needs, in one place
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Card 1: Documents */}
+              {/* Card 1: AI Document Scanning */}
               <div className="p-6 bg-white rounded-lg border border-border hover:border-primary/30 transition-colors">
-                <FileText className="h-8 w-8 text-primary mb-4" />
+                <div className="flex items-center gap-2 mb-4">
+                  <FileText className="h-8 w-8 text-primary" />
+                  <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">AI</span>
+                </div>
                 <h3 className="text-lg font-medium text-foreground mb-2">
-                  All Documents Secured
+                  Smart Document Scanning
                 </h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  Store insurance, RC, PUCC, and all certificates in one vault.
+                  Upload photos of your documents — AI extracts all the details automatically.
                 </p>
               </div>
 
@@ -151,7 +160,7 @@ const Index = () => {
                   Smart Alerts That Work
                 </h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  Get reminded before expiry via app, email, or phone calls.
+                  Get reminded before expiry via app, email, or AI voice calls.
                 </p>
               </div>
 
@@ -162,40 +171,46 @@ const Index = () => {
                   Auto-Fetch Details
                 </h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  Enter your registration number — we fetch the rest.
+                  Enter your registration number — we fetch 20+ fields instantly.
                 </p>
               </div>
 
-              {/* Card 4: Service History */}
+              {/* Card 4: AI Price Estimation & Sell */}
               <div className="p-6 bg-white rounded-lg border border-border hover:border-primary/30 transition-colors">
-                <Wrench className="h-8 w-8 text-primary mb-4" />
+                <div className="flex items-center gap-2 mb-4">
+                  <Tag className="h-8 w-8 text-primary" />
+                  <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">AI</span>
+                </div>
                 <h3 className="text-lg font-medium text-foreground mb-2">
-                  Service History Tracking
+                  Sell with AI Pricing
                 </h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  Log maintenance, repairs, and keep complete records.
+                  Get AI-powered market price estimates and list your vehicle for sale.
                 </p>
               </div>
 
               {/* Card 5: Verification */}
               <div className="p-6 bg-white rounded-lg border border-border hover:border-primary/30 transition-colors">
-                <CheckCircle className="h-8 w-8 text-primary mb-4" />
+                <div className="flex items-center gap-2 mb-4">
+                  <CheckCircle className="h-8 w-8 text-primary" />
+                  <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">AI</span>
+                </div>
                 <h3 className="text-lg font-medium text-foreground mb-2">
-                  Verified Vehicles
+                  AI Verification
                 </h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  Build trust with AI-powered photo verification.
+                  Build trust with AI-powered photo and number plate verification.
                 </p>
               </div>
 
-              {/* Card 6: Transfers */}
+              {/* Card 6: Service & Transfers */}
               <div className="p-6 bg-white rounded-lg border border-border hover:border-primary/30 transition-colors">
-                <ArrowRightLeft className="h-8 w-8 text-primary mb-4" />
+                <Wrench className="h-8 w-8 text-primary mb-4" />
                 <h3 className="text-lg font-medium text-foreground mb-2">
-                  Ownership Transfers
+                  Complete History
                 </h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  Securely transfer vehicle records when you sell.
+                  Track service history and securely transfer ownership when you sell.
                 </p>
               </div>
             </div>
