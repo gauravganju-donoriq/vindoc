@@ -9,15 +9,7 @@ import {
   Car, 
   Wrench, 
   CheckCircle, 
-  ArrowRightLeft, 
-  Lock, 
-  MapPin, 
-  Smartphone,
-  Sparkles,
-  Tag,
-  AlertTriangle,
-  Search,
-  Clock
+  ArrowRightLeft
 } from "lucide-react";
 
 const Index = () => {
@@ -31,252 +23,227 @@ const Index = () => {
     });
   }, [navigate]);
 
-  const scrollToHowItWorks = () => {
-    document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   return (
     <div className="min-h-screen bg-white">
-      {/* Sticky Header */}
+      {/* Header */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-border">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <Shield className="h-6 w-6 text-primary" />
-            <span className="text-xl font-semibold text-foreground">Valt</span>
+            <Shield className="h-5 w-5 text-primary" />
+            <span className="text-lg font-semibold text-foreground">Valt</span>
           </Link>
           <div className="flex items-center gap-3">
-            <Button variant="ghost" asChild>
+            <Button variant="ghost" size="sm" asChild>
               <Link to="/auth">Login</Link>
             </Button>
-            <Button asChild>
-              <Link to="/auth">Get Started</Link>
+            <Button size="sm" asChild>
+              <Link to="/auth">Sign Up</Link>
             </Button>
           </div>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="section-spacing hero-gradient">
+      <section className="py-20 md:py-32">
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
-            <Sparkles className="h-4 w-4" />
-            AI-Powered Platform
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6 leading-tight">
-            Never miss a vehicle document renewal again
-          </h1>
-          <p className="text-xl text-muted-foreground mb-10 leading-relaxed">
-            One secure place for all your vehicle documents, with AI-powered reminders and smart automation.
-          </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" asChild className="text-base px-8">
-                <Link to="/auth">Get Started Free</Link>
-              </Button>
-              <Button size="lg" variant="outline" onClick={scrollToHowItWorks} className="text-base px-8">
-                See How It Works
+          <div className="max-w-2xl mx-auto text-center">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight tracking-tight">
+              Your vehicle's paperwork,
+              <br />
+              finally under control.
+            </h1>
+            <p className="mt-6 text-lg md:text-xl text-muted-foreground leading-relaxed">
+              Stop worrying about expired documents, forgotten renewals, and last-minute fines.
+              <br className="hidden md:block" />
+              We handle the reminders. You enjoy the drive.
+            </p>
+            <div className="mt-10">
+              <Button size="lg" asChild className="px-8">
+                <Link to="/auth">Start Free</Link>
               </Button>
             </div>
-            
-            {/* Floating Icons Illustration */}
-            <div className="mt-16 flex justify-center items-center gap-6 opacity-60">
-              <div className="p-4 rounded-full bg-secondary animate-fade-in" style={{ animationDelay: '0.1s' }}>
-                <FileText className="h-8 w-8 text-primary" />
-              </div>
-              <div className="p-5 rounded-full bg-secondary animate-fade-in" style={{ animationDelay: '0.2s' }}>
-                <Shield className="h-10 w-10 text-primary" />
-              </div>
-              <div className="p-4 rounded-full bg-secondary animate-fade-in" style={{ animationDelay: '0.3s' }}>
-                <Bell className="h-8 w-8 text-primary" />
-              </div>
-            </div>
+            <p className="mt-6 text-sm text-muted-foreground">
+              Trusted by vehicle owners across India
+            </p>
           </div>
         </div>
       </section>
 
-      {/* Problem Statement Section */}
-      <section className="section-spacing bg-white">
+      {/* Pain Points Section */}
+      <section className="py-20 md:py-32 bg-background">
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
+          <div className="max-w-2xl mx-auto">
             <h2 className="text-2xl md:text-3xl font-semibold text-foreground mb-12">
-              Tired of last-minute scrambles for expired documents?
+              Sound familiar?
             </h2>
-            <div className="grid gap-8 md:grid-cols-3">
-              <div className="flex flex-col items-center text-center">
-                <div className="p-3 rounded-full bg-destructive/10 mb-4">
-                  <AlertTriangle className="h-6 w-6 text-destructive" />
-                </div>
-                <p className="text-muted-foreground">
-                  Fines and penalties for expired insurance
-                </p>
-              </div>
-              <div className="flex flex-col items-center text-center">
-                <div className="p-3 rounded-full bg-warning/10 mb-4">
-                  <Search className="h-6 w-6 text-warning" />
-                </div>
-                <p className="text-muted-foreground">
-                  Digging through files to find your RC
-                </p>
-              </div>
-              <div className="flex flex-col items-center text-center">
-                <div className="p-3 rounded-full bg-muted mb-4">
-                  <Clock className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <p className="text-muted-foreground">
-                  Forgetting PUCC renewal until challaned
-                </p>
-              </div>
+            <div className="space-y-8">
+              <p className="pain-quote">
+                "Where did I keep that insurance paper?"
+              </p>
+              <p className="pain-quote">
+                "Wait, my PUCC expired last month?"
+              </p>
+              <p className="pain-quote">
+                "Another challan... I completely forgot."
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Benefits Section */}
-      <section className="section-spacing bg-background">
+      {/* Solution Section */}
+      <section className="py-20 md:py-32">
         <div className="container mx-auto px-4">
-          <div className="max-w-5xl mx-auto">
-            <h2 className="text-2xl md:text-3xl font-semibold text-foreground text-center mb-12">
-              Everything your vehicle needs, in one place
+          <div className="max-w-2xl mx-auto">
+            <h2 className="text-2xl md:text-3xl font-semibold text-foreground mb-6">
+              There's a better way.
             </h2>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Card 1: AI Document Scanning */}
-              <div className="p-6 bg-white rounded-lg border border-border hover:border-primary/30 transition-colors">
-                <div className="flex items-center gap-2 mb-4">
-                  <FileText className="h-8 w-8 text-primary" />
-                  <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">AI</span>
+            <p className="text-lg text-muted-foreground leading-relaxed">
+              Valt keeps all your vehicle documents in one secure place — and reminds you before anything expires.
+              No more scrambling. No more surprises.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="py-20 md:py-32 bg-background">
+        <div className="container mx-auto px-4">
+          <div className="max-w-2xl mx-auto">
+            <h2 className="text-2xl md:text-3xl font-semibold text-foreground mb-12">
+              Everything you need. Nothing you don't.
+            </h2>
+            
+            <div className="space-y-0">
+              {/* Feature 1 */}
+              <div className="feature-divider" />
+              <div className="py-8 flex gap-4">
+                <FileText className="h-5 w-5 text-primary mt-1 shrink-0" />
+                <div>
+                  <h3 className="text-lg font-medium text-foreground mb-1">
+                    One place for all documents
+                  </h3>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Insurance, RC, PUCC, fitness — stored securely and always accessible.
+                  </p>
                 </div>
-                <h3 className="text-lg font-medium text-foreground mb-2">
-                  Smart Document Scanning
-                </h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Upload photos of your documents — AI extracts all the details automatically.
-                </p>
               </div>
 
-              {/* Card 2: Alerts */}
-              <div className="p-6 bg-white rounded-lg border border-border hover:border-primary/30 transition-colors">
-                <Bell className="h-8 w-8 text-primary mb-4" />
-                <h3 className="text-lg font-medium text-foreground mb-2">
-                  Smart Alerts That Work
-                </h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Get reminded before expiry via app, email, or AI voice calls.
-                </p>
-              </div>
-
-              {/* Card 3: Auto-Fetch */}
-              <div className="p-6 bg-white rounded-lg border border-border hover:border-primary/30 transition-colors">
-                <Car className="h-8 w-8 text-primary mb-4" />
-                <h3 className="text-lg font-medium text-foreground mb-2">
-                  Auto-Fetch Details
-                </h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Enter your registration number — we fetch 20+ fields instantly.
-                </p>
-              </div>
-
-              {/* Card 4: AI Price Estimation & Sell */}
-              <div className="p-6 bg-white rounded-lg border border-border hover:border-primary/30 transition-colors">
-                <div className="flex items-center gap-2 mb-4">
-                  <Tag className="h-8 w-8 text-primary" />
-                  <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">AI</span>
+              {/* Feature 2 */}
+              <div className="feature-divider" />
+              <div className="py-8 flex gap-4">
+                <Bell className="h-5 w-5 text-primary mt-1 shrink-0" />
+                <div>
+                  <h3 className="text-lg font-medium text-foreground mb-1">
+                    Smart reminders that actually work
+                  </h3>
+                  <p className="text-muted-foreground leading-relaxed">
+                    We'll call, email, or notify you — whatever works best for you.
+                  </p>
                 </div>
-                <h3 className="text-lg font-medium text-foreground mb-2">
-                  Sell with AI Pricing
-                </h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Get AI-powered market price estimates and list your vehicle for sale.
-                </p>
               </div>
 
-              {/* Card 5: Verification */}
-              <div className="p-6 bg-white rounded-lg border border-border hover:border-primary/30 transition-colors">
-                <div className="flex items-center gap-2 mb-4">
-                  <CheckCircle className="h-8 w-8 text-primary" />
-                  <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">AI</span>
+              {/* Feature 3 */}
+              <div className="feature-divider" />
+              <div className="py-8 flex gap-4">
+                <Car className="h-5 w-5 text-primary mt-1 shrink-0" />
+                <div>
+                  <h3 className="text-lg font-medium text-foreground mb-1">
+                    Instant details with your number plate
+                  </h3>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Enter your registration, we fetch 20+ vehicle details automatically.
+                  </p>
                 </div>
-                <h3 className="text-lg font-medium text-foreground mb-2">
-                  AI Verification
-                </h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Build trust with AI-powered photo and number plate verification.
-                </p>
               </div>
 
-              {/* Card 6: Service & Transfers */}
-              <div className="p-6 bg-white rounded-lg border border-border hover:border-primary/30 transition-colors">
-                <Wrench className="h-8 w-8 text-primary mb-4" />
-                <h3 className="text-lg font-medium text-foreground mb-2">
-                  Complete History
-                </h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Track service history and securely transfer ownership when you sell.
-                </p>
+              {/* Feature 4 */}
+              <div className="feature-divider" />
+              <div className="py-8 flex gap-4">
+                <ArrowRightLeft className="h-5 w-5 text-primary mt-1 shrink-0" />
+                <div>
+                  <h3 className="text-lg font-medium text-foreground mb-1">
+                    Sell when you're ready
+                  </h3>
+                  <p className="text-muted-foreground leading-relaxed">
+                    All your data is already verified. List your vehicle in minutes, not hours.
+                  </p>
+                </div>
               </div>
+
+              {/* Feature 5 */}
+              <div className="feature-divider" />
+              <div className="py-8 flex gap-4">
+                <Wrench className="h-5 w-5 text-primary mt-1 shrink-0" />
+                <div>
+                  <h3 className="text-lg font-medium text-foreground mb-1">
+                    Track every service
+                  </h3>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Maintenance history that transfers with your vehicle when you sell.
+                  </p>
+                </div>
+              </div>
+
+              {/* Feature 6 */}
+              <div className="feature-divider" />
+              <div className="py-8 flex gap-4">
+                <CheckCircle className="h-5 w-5 text-primary mt-1 shrink-0" />
+                <div>
+                  <h3 className="text-lg font-medium text-foreground mb-1">
+                    Verified ownership
+                  </h3>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Photo verification builds trust when it's time to sell.
+                  </p>
+                </div>
+              </div>
+              <div className="feature-divider" />
             </div>
           </div>
         </div>
       </section>
 
       {/* How It Works Section */}
-      <section id="how-it-works" className="section-spacing bg-white">
+      <section className="py-20 md:py-32">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto">
-            <h2 className="text-2xl md:text-3xl font-semibold text-foreground text-center mb-12">
-              Get started in 3 simple steps
+            <h2 className="text-2xl md:text-3xl font-semibold text-foreground mb-16">
+              Get started in under a minute
             </h2>
-            <div className="space-y-0">
+            
+            <div className="space-y-12">
               {/* Step 1 */}
-              <div className="flex gap-6 pb-8">
-                <div className="flex flex-col items-center">
-                  <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
-                    1
-                  </div>
-                  <div className="w-px h-full bg-border mt-2" />
-                </div>
-                <div className="pb-8">
-                  <h3 className="text-lg font-medium text-foreground mb-1">
-                    Add your vehicle
-                  </h3>
-                  <p className="text-muted-foreground text-sm">
-                    Enter registration number, we fetch the details
-                  </p>
-                </div>
+              <div>
+                <span className="step-number">1</span>
+                <h3 className="text-lg font-medium text-foreground mt-2 mb-1">
+                  Enter your vehicle number
+                </h3>
+                <p className="text-muted-foreground">
+                  We pull the details from official records.
+                </p>
               </div>
 
               {/* Step 2 */}
-              <div className="flex gap-6 pb-8">
-                <div className="flex flex-col items-center">
-                  <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
-                    2
-                  </div>
-                  <div className="w-px h-full bg-border mt-2" />
-                </div>
-                <div className="pb-8">
-                  <h3 className="text-lg font-medium text-foreground mb-1">
-                    Upload your documents
-                  </h3>
-                  <p className="text-muted-foreground text-sm">
-                    Our AI reads and organizes them automatically
-                  </p>
-                </div>
+              <div>
+                <span className="step-number">2</span>
+                <h3 className="text-lg font-medium text-foreground mt-2 mb-1">
+                  Snap photos of your documents
+                </h3>
+                <p className="text-muted-foreground">
+                  Our AI reads them so you don't have to type.
+                </p>
               </div>
 
               {/* Step 3 */}
-              <div className="flex gap-6">
-                <div className="flex flex-col items-center">
-                  <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
-                    3
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-medium text-foreground mb-1">
-                    Stay notified
-                  </h3>
-                  <p className="text-muted-foreground text-sm">
-                    Relax — we'll remind you before anything expires
-                  </p>
-                </div>
+              <div>
+                <span className="step-number">3</span>
+                <h3 className="text-lg font-medium text-foreground mt-2 mb-1">
+                  That's it. We'll take it from here.
+                </h3>
+                <p className="text-muted-foreground">
+                  Reminders, renewals, records — all handled.
+                </p>
               </div>
             </div>
           </div>
@@ -284,75 +251,46 @@ const Index = () => {
       </section>
 
       {/* Trust Section */}
-      <section className="section-spacing bg-background">
+      <section className="py-16 md:py-24 bg-background">
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto">
-            <h2 className="text-2xl md:text-3xl font-semibold text-foreground text-center mb-12">
+          <div className="max-w-2xl mx-auto text-center">
+            <h2 className="text-xl md:text-2xl font-medium text-foreground mb-4">
               Built for Indian vehicle owners
             </h2>
-            <div className="grid gap-8 md:grid-cols-3">
-              <div className="flex flex-col items-center text-center">
-                <div className="p-3 rounded-full bg-secondary mb-4">
-                  <Lock className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="font-medium text-foreground mb-1">Secure Storage</h3>
-                <p className="text-muted-foreground text-sm">
-                  Bank-grade encryption for your documents
-                </p>
-              </div>
-              <div className="flex flex-col items-center text-center">
-                <div className="p-3 rounded-full bg-secondary mb-4">
-                  <MapPin className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="font-medium text-foreground mb-1">Made for India</h3>
-                <p className="text-muted-foreground text-sm">
-                  Supports all Indian vehicle types and documents
-                </p>
-              </div>
-              <div className="flex flex-col items-center text-center">
-                <div className="p-3 rounded-full bg-secondary mb-4">
-                  <Smartphone className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="font-medium text-foreground mb-1">Works Everywhere</h3>
-                <p className="text-muted-foreground text-sm">
-                  Access from any device, anytime
-                </p>
-              </div>
-            </div>
+            <p className="text-muted-foreground">
+              Bank-grade security · All vehicle types supported · Works on any device
+            </p>
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="section-spacing bg-secondary/50">
+      {/* Final CTA Section */}
+      <section className="py-20 md:py-32">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto text-center">
-            <h2 className="text-2xl md:text-3xl font-semibold text-foreground mb-6">
-              Ready to simplify your vehicle paperwork?
+            <h2 className="text-2xl md:text-3xl font-semibold text-foreground mb-8">
+              Ready to stop worrying about paperwork?
             </h2>
-            <Button size="lg" asChild className="text-base px-10 mb-4">
-              <Link to="/auth">Get Started Free</Link>
+            <Button size="lg" asChild className="px-8">
+              <Link to="/auth">Start Free</Link>
             </Button>
-            <p className="text-muted-foreground text-sm">
-              No credit card required. Start in 30 seconds.
+            <p className="mt-6 text-sm text-muted-foreground">
+              No credit card required · Takes 30 seconds
             </p>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-8 border-t border-border bg-white">
+      <footer className="py-8 border-t border-border">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
+              <Shield className="h-4 w-4 text-primary" />
               <span className="font-medium text-foreground">Valt</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Currently available for Indian vehicles only
-            </p>
-            <p className="text-sm text-muted-foreground">
-              © 2026 Valt
+              © 2026 · India
             </p>
           </div>
         </div>

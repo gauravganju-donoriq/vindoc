@@ -1,4 +1,29 @@
 @tailwind base;
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Feature list divider */
+.feature-divider {
+  border-top: 1px solid hsl(210 15% 92%);
+}
+
+/* Large step numbers */
+.step-number {
+  font-size: 4rem;
+  font-weight: 700;
+  color: hsl(210 15% 90%);
+  line-height: 1;
+}
+
+/* Quote styling for pain points */
+.pain-quote {
+  font-size: 1.25rem;
+  font-style: italic;
+  color: hsl(215 15% 50%);
+}
 @tailwind components;
 @tailwind utilities;
 
