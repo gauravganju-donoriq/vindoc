@@ -35,6 +35,7 @@ import VehicleProfileImage from "@/components/vehicle/VehicleProfileImage";
 import VerificationProgress from "@/components/vehicle/VerificationProgress";
 import ExpiryIntelligence from "@/components/vehicle/ExpiryIntelligence";
 import SellVehicleTab from "@/components/vehicle/SellVehicleTab";
+import ChallanTab from "@/components/vehicle/ChallanTab";
 import { logVehicleEvent } from "@/lib/vehicleHistory";
 import { calculateVerificationProgress } from "@/lib/verificationChecks";
 import { toTitleCase } from "@/lib/utils";
@@ -758,6 +759,9 @@ const VehicleDetails = () => {
               <TabsTrigger value="activity" className="rounded-lg data-[state=active]:bg-gray-900 data-[state=active]:text-white">
                 Activity
               </TabsTrigger>
+              <TabsTrigger value="challan" className="rounded-lg data-[state=active]:bg-gray-900 data-[state=active]:text-white">
+                Challan
+              </TabsTrigger>
               <TabsTrigger value="sell" className="rounded-lg data-[state=active]:bg-gray-900 data-[state=active]:text-white">
                 Sell
               </TabsTrigger>
@@ -1066,6 +1070,11 @@ const VehicleDetails = () => {
             {/* Activity Tab */}
             <TabsContent value="activity" className="mt-0">
               <VehicleHistory vehicleId={vehicle.id} variant="inline" />
+            </TabsContent>
+
+            {/* Challan Tab */}
+            <TabsContent value="challan" className="mt-0">
+              <ChallanTab vehicle={vehicle} />
             </TabsContent>
 
             {/* Sell Tab */}

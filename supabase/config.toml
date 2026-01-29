@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.estimate-vehicle-price]
 verify_jwt = false
+
+[functions.fetch-challan-details]
+verify_jwt = false
