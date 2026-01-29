@@ -1,181 +1,333 @@
 
-# Plan: Enforce 100% Verification for Sell Module
 
-## Problem Statement
+# Plan: Complete Homepage Redesign
 
-Currently, the Sell tab only checks if `vehicle.is_verified` (photo verification) is true. However, the user wants to enforce that **all verification steps must be complete (100%)** before a vehicle can be listed for sale.
+## Feature Summary
 
-The verification system has 4 required categories:
-1. Photo Verification (`is_verified = true`)
-2. Vehicle Identity (4 of 5 fields: registration_number, owner_name, manufacturer, maker_model, registration_date)
-3. Technical Specs (5 of 7 fields: chassis_number, engine_number, fuel_type, color, seating_capacity, cubic_capacity, vehicle_class)
-4. Ownership Details (2 of 2 fields: owner_count, rc_status)
+Based on my exploration of the codebase, **Valt** is a comprehensive vehicle document management platform with these core features:
 
-## Current Architecture
+### 1. Document Storage & Management
+- Secure cloud storage for insurance, RC, PUCC, fitness certificates
+- AI-powered document analysis that auto-extracts data from uploaded photos
+- Automatic field population from document scans
 
+### 2. Smart Expiry Alerts
+- Visual expiry tracking dashboard with color-coded status (expired, expiring soon, valid)
+- AI-generated renewal tips with estimated costs and consequences
+- Vehicle lifespan tracking based on fuel type and metro regulations
+
+### 3. Voice Call Reminders
+- Automated phone calls for document expiry alerts
+- Multi-language support (English, Hindi, Tamil, Telugu)
+- Customizable reminder preferences
+
+### 4. Auto-Fetch Vehicle Details
+- Instant data retrieval using registration number from official records
+- Populates 20+ fields automatically (manufacturer, model, engine, chassis, etc.)
+- Refresh data periodically to keep information current
+
+### 5. Photo Verification System
+- AI-powered number plate recognition
+- Verify vehicle ownership with photo upload
+- Verified badge for trusted listings
+
+### 6. Complete Verification Progress
+- 4-tier verification system: Photo, Identity, Technical Specs, Ownership
+- Progress tracking with completion percentage
+- Required for marketplace listing eligibility
+
+### 7. Service History Tracking
+- Log maintenance, repairs, oil changes, tire replacements
+- Track total spending and odometer readings
+- Next service reminders with date/km thresholds
+
+### 8. Vehicle Sell Module
+- AI-powered market price estimation
+- Admin approval workflow for listings
+- Status tracking (pending, approved, rejected)
+
+### 9. Ownership Transfers
+- Request/send ownership to other users
+- Admin oversight for security
+- Ownership claims for existing vehicles
+
+---
+
+## Homepage Redesign Approach
+
+### Design Principles
+- **Pure white background** (#FFFFFF) for the main content
+- **Minimal gray** - only for subtle borders and secondary text
+- **Thin 1px lines** for section dividers
+- **Generous spacing** - 120px+ between major sections
+- **Clean typography** - Inter font, clear hierarchy
+- **Smooth scroll behavior** - CSS scroll-snap and smooth transitions
+- **Startup aesthetic** - modern, professional, trustworthy
+
+### No Numbers/Dollar Values
+- Focus on **benefits** not savings statistics
+- Emphasize **peace of mind** and **convenience**
+- Highlight **time saved** and **stress reduced**
+
+---
+
+## Page Structure
+
+### 1. Navigation Header (Sticky)
 ```
-+---------------------------+     +----------------------+
-|  VehicleDetails.tsx       |     | SellVehicleTab.tsx   |
-|                           |     |                      |
-| calculateVerificationProgress() | isVerified: boolean  |
-| returns isFullyVerified   |---->| (only photo check)   |
-+---------------------------+     +----------------------+
-                                           |
-                                           v
-+---------------------------+     +----------------------+
-|  RLS Policy               |     | estimate-vehicle-    |
-|  vehicle_listings INSERT  |     | price Edge Function  |
-|                           |     |                      |
-|  vehicles.is_verified=true|     | No verification check|
-|  (only photo check)       |     |                      |
-+---------------------------+     +----------------------+
++---------------------------------------------------------------+
+|  [Logo] Valt                              [Login] [Get Started]|
++---------------------------------------------------------------+
 ```
+- Clean, minimal header with logo left, CTAs right
+- Semi-transparent on scroll with blur effect
+- Thin bottom border (1px)
 
-## Solution Design
+### 2. Hero Section
+```
++---------------------------------------------------------------+
+|                                                               |
+|     Never miss a vehicle document renewal again               |
+|                                                               |
+|     One secure place for all your vehicle documents,          |
+|     with smart reminders that actually work.                  |
+|                                                               |
+|              [Get Started Free]   [See How It Works]          |
+|                                                               |
+|     [Simple illustration of document icons floating]          |
+|                                                               |
++---------------------------------------------------------------+
+```
+- Large, bold headline focused on the core benefit
+- Subtext explains value without jargon
+- Two CTAs: primary action + learn more
+- Optional: minimalist illustration or icon composition
 
-### Layer 1: Frontend Enforcement (UI Gate)
+### 3. Problem Statement Section
+```
++---------------------------------------------------------------+
+|                                                               |
+|     Tired of last-minute scrambles for expired documents?     |
+|                                                               |
+|     [Icon] Fines and penalties for expired insurance          |
+|     [Icon] Digging through files to find your RC              |
+|     [Icon] Forgetting PUCC renewal until challaned            |
+|                                                               |
++---------------------------------------------------------------+
+```
+- Empathy-driven messaging
+- 3 pain points with minimal icons
+- White background, plenty of whitespace
 
-**File: `src/pages/VehicleDetails.tsx`**
-- Calculate verification progress using existing `calculateVerificationProgress(vehicle, documents)`
-- Pass `isFullyVerified` instead of `!!vehicle.is_verified` to SellVehicleTab
-- Also pass the full progress object for detailed messaging
+### 4. Benefits Section (The Core)
+```
++---------------------------------------------------------------+
+|                                                               |
+|     Everything your vehicle needs, in one place               |
+|                                                               |
+|  +-----------------+  +-----------------+  +-----------------+ |
+|  | [Icon]          |  | [Icon]          |  | [Icon]          | |
+|  |                 |  |                 |  |                 | |
+|  | All Documents   |  | Smart Alerts    |  | Auto-Fetch      | |
+|  | Secured         |  | That Work       |  | Details         | |
+|  |                 |  |                 |  |                 | |
+|  | Store insurance,|  | Get reminded    |  | Enter your      | |
+|  | RC, PUCC, and   |  | before expiry   |  | registration    | |
+|  | all certificates|  | via app, email, |  | number - we     | |
+|  | in one vault.   |  | or phone calls. |  | fetch the rest. | |
+|  +-----------------+  +-----------------+  +-----------------+ |
+|                                                               |
+|  +-----------------+  +-----------------+  +-----------------+ |
+|  | [Icon]          |  | [Icon]          |  | [Icon]          | |
+|  |                 |  |                 |  |                 | |
+|  | Service History |  | Verified        |  | Ownership       | |
+|  | Tracking        |  | Vehicles        |  | Transfers       | |
+|  |                 |  |                 |  |                 | |
+|  | Log maintenance |  | Build trust     |  | Securely        | |
+|  | repairs, and    |  | with AI-powered |  | transfer when   | |
+|  | keep records.   |  | verification.   |  | you sell.       | |
+|  +-----------------+  +-----------------+  +-----------------+ |
+|                                                               |
++---------------------------------------------------------------+
+```
+- 6 benefit cards in 3x2 grid (2x3 on mobile)
+- Each card: icon + title + 2-line description
+- Thin border cards, no shadows
+- Focus on benefits, not features
 
-**File: `src/components/vehicle/SellVehicleTab.tsx`**
-- Update props to accept `verificationProgress` object
-- Show detailed empty state with:
-  - List of incomplete steps
-  - Progress percentage
-  - Link/button to Verification tab
-- Only allow listing submission when `isFullyVerified === true`
+### 5. How It Works Section
+```
++---------------------------------------------------------------+
+|                                                               |
+|     Get started in 3 simple steps                             |
+|                                                               |
+|     1. Add your vehicle                                       |
+|        Enter registration number, we fetch the details        |
+|                                                               |
+|     ---                                                       |
+|                                                               |
+|     2. Upload your documents                                  |
+|        Our AI reads and organizes them automatically          |
+|                                                               |
+|     ---                                                       |
+|                                                               |
+|     3. Stay notified                                          |
+|        Relax - we'll remind you before anything expires       |
+|                                                               |
++---------------------------------------------------------------+
+```
+- Simple numbered steps with thin line connectors
+- Brief, action-oriented descriptions
+- Horizontal thin line separators
 
-### Layer 2: Backend Enforcement (Security)
+### 6. Trust Section
+```
++---------------------------------------------------------------+
+|                                                               |
+|     Built for Indian vehicle owners                           |
+|                                                               |
+|     [Lock] Secure      [India] Made for     [Check] Works     |
+|            Storage            Indian              Offline     |
+|                               Vehicles            Too         |
+|                                                               |
++---------------------------------------------------------------+
+```
+- 3 trust signals with icons
+- Simple, reassuring messaging
+- Clean horizontal layout
 
-**File: `supabase/functions/estimate-vehicle-price/index.ts`**
-- Add verification check before generating price estimate
-- Query vehicle data and verify all required fields are present
-- Return error if verification incomplete
+### 7. CTA Section
+```
++---------------------------------------------------------------+
+|                                                               |
+|     Ready to simplify your vehicle paperwork?                 |
+|                                                               |
+|              [Get Started Free]                               |
+|                                                               |
+|     No credit card required. Start in 30 seconds.             |
+|                                                               |
++---------------------------------------------------------------+
+```
+- Single prominent CTA
+- Reassuring micro-copy
+- Subtle background tint (very light gray)
 
-**Database: RLS Policy Update**
-- The current RLS policy only checks `is_verified = true`
-- We need to update to check all required fields
-- Alternative: Keep RLS simple, add validation in Edge Function (recommended for flexibility)
+### 8. Footer
+```
++---------------------------------------------------------------+
+|                                                               |
+|     [Logo] Valt                                               |
+|                                                               |
+|     Currently available for Indian vehicles only              |
+|                                                               |
+|     © 2026 Valt                                               |
+|                                                               |
++---------------------------------------------------------------+
+```
+- Minimal footer
+- Single-line layout
+- Thin top border
 
-### Layer 3: Edge Function Validation
+---
 
-**File: `supabase/functions/estimate-vehicle-price/index.ts`**
-Add server-side verification check:
+## Technical Implementation
 
-```typescript
-// Check full verification status
-const requiredIdentityFields = ['registration_number', 'owner_name', 'manufacturer', 'maker_model', 'registration_date'];
-const requiredTechnicalFields = ['chassis_number', 'engine_number', 'fuel_type', 'color', 'seating_capacity', 'cubic_capacity', 'vehicle_class'];
-const requiredOwnershipFields = ['owner_count', 'rc_status'];
+### File Changes
 
-const identityCount = requiredIdentityFields.filter(f => vehicle[f]).length;
-const technicalCount = requiredTechnicalFields.filter(f => vehicle[f]).length;
-const ownershipCount = requiredOwnershipFields.filter(f => vehicle[f]).length;
+| File | Action |
+|------|--------|
+| `src/pages/Index.tsx` | Complete rewrite with new layout |
+| `src/index.css` | Add smooth scroll behavior and custom utilities |
 
-const isFullyVerified = 
-  vehicle.is_verified === true &&
-  identityCount >= 4 &&
-  technicalCount >= 5 &&
-  ownershipCount >= 2;
+### New CSS Classes Needed
+```css
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
 
-if (!isFullyVerified) {
-  return error: "Vehicle must be 100% verified before listing for sale"
+/* Section spacing */
+.section-spacing {
+  padding: 5rem 0;
+}
+
+@media (min-width: 768px) {
+  .section-spacing {
+    padding: 7.5rem 0;
+  }
+}
+
+/* Thin borders */
+.border-thin {
+  border-width: 1px;
+}
+
+/* Hero gradient (subtle) */
+.hero-gradient {
+  background: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 20% 98%) 100%);
 }
 ```
 
----
-
-## Implementation Details
-
-### 1. Update SellVehicleTab Props Interface
-
-```typescript
-interface SellVehicleTabProps {
-  vehicle: Vehicle;
-  verificationProgress: VerificationProgressType;
-}
+### Component Structure
+```
+Index.tsx
+├── Header (sticky nav)
+├── HeroSection
+├── ProblemSection
+├── BenefitsSection (6 cards)
+├── HowItWorksSection (3 steps)
+├── TrustSection
+├── CTASection
+└── Footer
 ```
 
-### 2. Enhanced Empty State UI
+### Icons Used (from lucide-react)
+- `Shield` - logo/security
+- `FileText` - documents
+- `Bell` - alerts
+- `Car` - vehicle
+- `Wrench` - service
+- `CheckCircle` - verification
+- `ArrowRight` - ownership transfer
+- `Lock` - security
+- `MapPin` - India
+- `Wifi` / `WifiOff` - offline capability
 
-When not fully verified, show:
-- Current verification percentage with progress bar
-- List of incomplete required steps
-- Clear call-to-action: "Complete Verification" button that switches to Verification tab
-- Explanation of why verification is required for selling
-
-### 3. Security Layers Summary
-
-| Layer | Location | Check |
-|-------|----------|-------|
-| UI Gate | SellVehicleTab | isFullyVerified from calculateVerificationProgress() |
-| API Gate | estimate-vehicle-price | Server-side field validation |
-| DB Gate | RLS Policy | Keep existing is_verified check (prevents bulk manipulation) |
-
----
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/pages/VehicleDetails.tsx` | Calculate progress, pass to SellVehicleTab |
-| `src/components/vehicle/SellVehicleTab.tsx` | Update props, add detailed empty state |
-| `supabase/functions/estimate-vehicle-price/index.ts` | Add server-side verification check |
+### Animations
+- Fade-in on scroll (using intersection observer)
+- Subtle hover scale on cards (1.02)
+- Smooth button hover transitions
 
 ---
 
-## Security Considerations
+## Mobile Responsiveness
 
-1. **Frontend + Backend validation**: Never trust frontend alone - Edge Function will verify
-2. **RLS remains as last line of defense**: Keeps `is_verified = true` check
-3. **No loopholes**: User cannot bypass UI to call estimate-vehicle-price directly without full verification
-4. **Clear error messages**: Both UI and API return helpful guidance on what's missing
-
----
-
-## Empty State Design
-
-When vehicle is not 100% verified:
-
-```
-+------------------------------------------+
-|  [Lock Icon]  Complete Verification      |
-|                                          |
-|  Your vehicle must be 100% verified      |
-|  before listing for sale. This ensures   |
-|  buyer trust and faster sales.           |
-|                                          |
-|  [Progress Bar: 60%]                     |
-|                                          |
-|  ✓ Photo Verification                    |
-|  ✓ Vehicle Identity                      |
-|  ○ Technical Specs (3/5 required)        |
-|  ○ Ownership Details (1/2 required)      |
-|                                          |
-|  [Complete Verification] button          |
-+------------------------------------------+
-```
+- Hero: Stack vertically, larger text
+- Benefits grid: 1 column on mobile, 2 on tablet, 3 on desktop
+- How It Works: Vertical timeline with left-aligned numbers
+- Header: Hamburger menu optional (or keep simple with just 2 buttons)
+- Generous touch targets (min 44px)
 
 ---
 
-## User Flow After Implementation
+## Color Palette (Existing Brand)
 
-```
-User clicks "Sell" tab
-        |
-        v
-Is vehicle 100% verified?
-        |
-   +----+----+
-   |         |
-  NO        YES
-   |         |
-   v         v
-Show empty  Show listing
-state with   form with
-missing      AI price
-steps        estimate
-```
+| Element | Color |
+|---------|-------|
+| Background | `#FFFFFF` (pure white) |
+| Text Primary | `hsl(220 20% 18%)` (soft charcoal) |
+| Text Secondary | `hsl(215 15% 50%)` (muted gray) |
+| Primary Button | `hsl(220 10% 40%)` (slate gray) |
+| Borders | `hsl(210 15% 90%)` (light gray) |
+| Accent BG | `hsl(210 20% 98%)` (off-white for sections) |
+
+---
+
+## Accessibility Considerations
+
+- Proper heading hierarchy (h1 > h2 > h3)
+- Alt text for any icons/illustrations
+- Focus states on interactive elements
+- Sufficient color contrast (WCAG AA)
+- Keyboard navigation support
+
