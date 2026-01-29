@@ -1,9 +1,22 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
+// Standardized CORS headers
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Request validation schema
+const RequestSchema = z.object({
+  documentBase64: z.string().min(1, "Document is required"),
+  documentType: z.enum(["auto", "insurance", "rc", "pucc", "fitness", "other"]).default("auto"),
+  vehicleContext: z.object({
+    registration_number: z.string().optional(),
+  }).optional().nullable(),
+  mimeType: z.string().optional(),
+});
 
 // Universal field list - all possible vehicle fields that can be extracted
 const allFields = [
@@ -14,9 +27,9 @@ const allFields = [
   "pucc_valid_upto", "fitness_valid_upto", "road_tax_valid_upto", "emission_norms"
 ];
 
-// Field mappings by document type (for when user explicitly selects a type)
+// Field mappings by document type
 const fieldsByDocumentType: Record<string, string[]> = {
-  auto: allFields, // Universal extraction
+  auto: allFields,
   insurance: ["insurance_company", "insurance_expiry", "owner_name"],
   rc: [
     "owner_name", "chassis_number", "engine_number", "registration_date",
@@ -26,50 +39,100 @@ const fieldsByDocumentType: Record<string, string[]> = {
   ],
   pucc: ["pucc_valid_upto", "emission_norms"],
   fitness: ["fitness_valid_upto"],
-  other: allFields // Treat "other" as universal extraction too
+  other: allFields
 };
 
+// Standardized error response
+function errorResponse(message: string, status: number, errorType: string) {
+  return new Response(
+    JSON.stringify({ error: message, errorType, success: false }),
+    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+// AI request timeout (30 seconds)
+const AI_TIMEOUT_MS = 30000;
+
 serve(async (req) => {
+  const requestId = crypto.randomUUID();
+  const startTime = Date.now();
+  
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { documentBase64, documentType, vehicleContext, mimeType } = await req.json();
-
-    if (!documentBase64) {
-      return new Response(
-        JSON.stringify({ error: "No document provided", success: false }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // ============= PHASE 1: AUTHENTICATION =============
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      console.log(`[${requestId}] Missing authorization header`);
+      return errorResponse("Unauthorized", 401, "auth_missing");
     }
 
-    // Validate base64 and log size for debugging
+    // Validate environment variables
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error(`[${requestId}] Missing Supabase configuration`);
+      return errorResponse("Server configuration error", 500, "config_error");
+    }
+
+    if (!lovableApiKey) {
+      console.error(`[${requestId}] LOVABLE_API_KEY not configured`);
+      return errorResponse("AI service not configured", 500, "config_error");
+    }
+
+    // Verify the user
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims?.sub) {
+      console.log(`[${requestId}] Invalid token:`, claimsError?.message);
+      return errorResponse("Invalid token", 401, "auth_invalid");
+    }
+
+    const userId = claimsData.claims.sub as string;
+    console.log(`[${requestId}] Authenticated user: ${userId}`);
+
+    // ============= PHASE 2: VALIDATE INPUT =============
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return errorResponse("Invalid JSON body", 400, "invalid_json");
+    }
+
+    const validation = RequestSchema.safeParse(rawBody);
+    if (!validation.success) {
+      const errorMessage = validation.error.errors[0]?.message || "Invalid input";
+      return errorResponse(errorMessage, 400, "validation_error");
+    }
+
+    const { documentBase64, documentType, vehicleContext, mimeType } = validation.data;
+
+    // Validate base64 size
     const base64Size = Math.round((documentBase64.length * 3) / 4 / 1024);
-    console.log(`Processing image: ~${base64Size}KB, type: ${mimeType || "unknown"}, docType: ${documentType}`);
+    console.log(`[${requestId}] Processing image: ~${base64Size}KB, type: ${mimeType || "unknown"}, docType: ${documentType}`);
 
     if (base64Size > 4096) {
-      return new Response(
-        JSON.stringify({ 
-          error: "Image too large. Please upload an image smaller than 4MB.", 
-          errorType: "image_too_large",
-          success: false 
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      return errorResponse(
+        "Image too large. Please upload an image smaller than 4MB.",
+        400,
+        "image_too_large"
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
-
-    // Use universal extraction for "auto" mode or unrecognized types
+    // ============= PHASE 3: PREPARE AI REQUEST =============
     const isAutoMode = documentType === "auto" || !fieldsByDocumentType[documentType];
     const fieldsToExtract = isAutoMode ? allFields : fieldsByDocumentType[documentType];
 
-    // Build the prompt for document analysis
     const systemPrompt = isAutoMode 
       ? `You are a specialized document analyzer for Indian vehicle documents. 
 
@@ -118,187 +181,186 @@ Look for these fields if they appear: ${fieldsToExtract.join(", ")}`
 
 Extract these fields if visible: ${fieldsToExtract.join(", ")}`;
 
-    // Determine the correct media type - ensure it's a valid type
+    // Determine the correct media type
     let mediaType = mimeType || "image/jpeg";
     if (!mediaType.startsWith("image/")) {
       mediaType = "image/jpeg";
     }
 
-    console.log(`Sending request to AI gateway with model google/gemini-2.5-pro (auto mode: ${isAutoMode})`);
+    console.log(`[${requestId}] Sending request to AI gateway (auto mode: ${isAutoMode})`);
 
-    // Use Gemini Pro which has strongest document/image understanding
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { 
-            role: "user", 
-            content: [
-              { type: "text", text: userPrompt },
-              { 
-                type: "image_url", 
-                image_url: { 
-                  url: `data:${mediaType};base64,${documentBase64}` 
-                } 
-              }
-            ]
-          }
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "extract_document_fields",
-              description: "Extract fields from the vehicle document",
-              parameters: {
-                type: "object",
-                properties: {
-                  extracted_fields: {
-                    type: "object",
-                    description: "The extracted fields from the document",
-                    properties: {
-                      owner_name: { type: "string", description: "Name of the vehicle owner" },
-                      insurance_company: { type: "string", description: "Insurance company name" },
-                      insurance_expiry: { type: "string", description: "Insurance expiry date (YYYY-MM-DD)" },
-                      chassis_number: { type: "string", description: "Chassis number of the vehicle" },
-                      engine_number: { type: "string", description: "Engine number of the vehicle" },
-                      registration_date: { type: "string", description: "Vehicle registration date (YYYY-MM-DD)" },
-                      manufacturer: { type: "string", description: "Vehicle manufacturer/make" },
-                      maker_model: { type: "string", description: "Vehicle model name" },
-                      fuel_type: { type: "string", description: "Fuel type (Petrol/Diesel/CNG/Electric)" },
-                      color: { type: "string", description: "Vehicle color" },
-                      seating_capacity: { type: "number", description: "Number of seats" },
-                      cubic_capacity: { type: "number", description: "Engine cubic capacity in cc" },
-                      vehicle_class: { type: "string", description: "Vehicle class/type" },
-                      body_type: { type: "string", description: "Body type of vehicle" },
-                      vehicle_category: { type: "string", description: "Vehicle category" },
-                      gross_vehicle_weight: { type: "string", description: "Gross vehicle weight" },
-                      unladen_weight: { type: "string", description: "Unladen weight of vehicle" },
-                      pucc_valid_upto: { type: "string", description: "PUCC validity date (YYYY-MM-DD)" },
-                      fitness_valid_upto: { type: "string", description: "Fitness certificate validity (YYYY-MM-DD)" },
-                      road_tax_valid_upto: { type: "string", description: "Road tax validity date (YYYY-MM-DD)" },
-                      emission_norms: { type: "string", description: "Emission norms (BS4/BS6 etc)" }
+    // ============= PHASE 4: CALL AI WITH TIMEOUT =============
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+
+    try {
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lovableApiKey}`,
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: "google/gemini-2.5-pro",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { 
+              role: "user", 
+              content: [
+                { type: "text", text: userPrompt },
+                { 
+                  type: "image_url", 
+                  image_url: { 
+                    url: `data:${mediaType};base64,${documentBase64}` 
+                  } 
+                }
+              ]
+            }
+          ],
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "extract_document_fields",
+                description: "Extract fields from the vehicle document",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    extracted_fields: {
+                      type: "object",
+                      description: "The extracted fields from the document",
+                      properties: {
+                        owner_name: { type: "string", description: "Name of the vehicle owner" },
+                        insurance_company: { type: "string", description: "Insurance company name" },
+                        insurance_expiry: { type: "string", description: "Insurance expiry date (YYYY-MM-DD)" },
+                        chassis_number: { type: "string", description: "Chassis number of the vehicle" },
+                        engine_number: { type: "string", description: "Engine number of the vehicle" },
+                        registration_date: { type: "string", description: "Vehicle registration date (YYYY-MM-DD)" },
+                        manufacturer: { type: "string", description: "Vehicle manufacturer/make" },
+                        maker_model: { type: "string", description: "Vehicle model name" },
+                        fuel_type: { type: "string", description: "Fuel type (Petrol/Diesel/CNG/Electric)" },
+                        color: { type: "string", description: "Vehicle color" },
+                        seating_capacity: { type: "number", description: "Number of seats" },
+                        cubic_capacity: { type: "number", description: "Engine cubic capacity in cc" },
+                        vehicle_class: { type: "string", description: "Vehicle class/type" },
+                        body_type: { type: "string", description: "Body type of vehicle" },
+                        vehicle_category: { type: "string", description: "Vehicle category" },
+                        gross_vehicle_weight: { type: "string", description: "Gross vehicle weight" },
+                        unladen_weight: { type: "string", description: "Unladen weight of vehicle" },
+                        pucc_valid_upto: { type: "string", description: "PUCC validity date (YYYY-MM-DD)" },
+                        fitness_valid_upto: { type: "string", description: "Fitness certificate validity (YYYY-MM-DD)" },
+                        road_tax_valid_upto: { type: "string", description: "Road tax validity date (YYYY-MM-DD)" },
+                        emission_norms: { type: "string", description: "Emission norms (BS4/BS6 etc)" }
+                      }
+                    },
+                    confidence: {
+                      type: "string",
+                      enum: ["high", "medium", "low"],
+                      description: "Overall confidence in the extraction"
+                    },
+                    document_type_detected: {
+                      type: "string",
+                      enum: ["insurance", "rc", "pucc", "fitness", "other"],
+                      description: "The type of document detected"
                     }
                   },
-                  confidence: {
-                    type: "string",
-                    enum: ["high", "medium", "low"],
-                    description: "Overall confidence in the extraction"
-                  },
-                  document_type_detected: {
-                    type: "string",
-                    enum: ["insurance", "rc", "pucc", "fitness", "other"],
-                    description: "The type of document detected"
-                  }
-                },
-                required: ["extracted_fields", "confidence", "document_type_detected"]
+                  required: ["extracted_fields", "confidence", "document_type_detected"]
+                }
               }
             }
-          }
-        ],
-        tool_choice: { type: "function", function: { name: "extract_document_fields" } }
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ 
-            error: "Rate limit exceeded. Please try again in a few moments.", 
-            errorType: "rate_limit",
-            success: false 
-          }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ 
-            error: "AI service payment required. Please contact support.", 
-            errorType: "payment_required",
-            success: false 
-          }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      // Parse error to give more specific message
-      let errorMessage = "AI analysis failed. Please try again.";
-      try {
-        const errorJson = JSON.parse(errorText);
-        if (errorJson?.error?.message?.includes("Unable to process")) {
-          errorMessage = "Could not process the image. Please ensure it's a clear, readable document photo.";
-        }
-      } catch {
-        // Use default error message
-      }
-      
-      return new Response(
-        JSON.stringify({ 
-          error: errorMessage, 
-          errorType: "ai_error",
-          success: false 
+          ],
+          tool_choice: { type: "function", function: { name: "extract_document_fields" } }
         }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+      });
 
-    const aiResponse = await response.json();
-    console.log("AI Response received successfully");
+      clearTimeout(timeoutId);
 
-    // Extract the tool call result
-    const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall || toolCall.function.name !== "extract_document_fields") {
-      console.error("Unexpected AI response structure:", JSON.stringify(aiResponse, null, 2));
-      throw new Error("AI did not return expected extraction results");
-    }
-
-    const extractedData = JSON.parse(toolCall.function.arguments);
-    const detectedType = extractedData.document_type_detected || documentType;
-
-    // For auto mode, return all extracted fields
-    // For specific document types, filter to relevant fields only
-    const filteredFields: Record<string, any> = {};
-    const relevantFields = isAutoMode ? allFields : fieldsToExtract;
-    
-    for (const field of relevantFields) {
-      if (extractedData.extracted_fields[field] !== undefined && 
-          extractedData.extracted_fields[field] !== null &&
-          extractedData.extracted_fields[field] !== "") {
-        filteredFields[field] = extractedData.extracted_fields[field];
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[${requestId}] AI gateway error:`, response.status, errorText);
+        
+        if (response.status === 429) {
+          return errorResponse(
+            "Rate limit exceeded. Please try again in a few moments.",
+            429,
+            "rate_limit"
+          );
+        }
+        if (response.status === 402) {
+          return errorResponse(
+            "AI service payment required. Please contact support.",
+            402,
+            "payment_required"
+          );
+        }
+        
+        let errorMessage = "AI analysis failed. Please try again.";
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson?.error?.message?.includes("Unable to process")) {
+            errorMessage = "Could not process the image. Please ensure it's a clear, readable document photo.";
+          }
+        } catch {
+          // Use default error message
+        }
+        
+        return errorResponse(errorMessage, 500, "ai_error");
       }
+
+      const aiResponse = await response.json();
+      console.log(`[${requestId}] AI Response received successfully`);
+
+      // Extract the tool call result
+      const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
+      if (!toolCall || toolCall.function.name !== "extract_document_fields") {
+        console.error(`[${requestId}] Unexpected AI response structure`);
+        return errorResponse("AI did not return expected extraction results", 500, "ai_error");
+      }
+
+      const extractedData = JSON.parse(toolCall.function.arguments);
+      const detectedType = extractedData.document_type_detected || documentType;
+
+      // Filter to relevant fields only
+      const filteredFields: Record<string, unknown> = {};
+      const relevantFields = isAutoMode ? allFields : fieldsToExtract;
+      
+      for (const field of relevantFields) {
+        if (extractedData.extracted_fields[field] !== undefined && 
+            extractedData.extracted_fields[field] !== null &&
+            extractedData.extracted_fields[field] !== "") {
+          filteredFields[field] = extractedData.extracted_fields[field];
+        }
+      }
+
+      const duration = Date.now() - startTime;
+      console.log(`[${requestId}] Extracted ${Object.keys(filteredFields).length} fields with ${extractedData.confidence} confidence in ${duration}ms`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          extractedFields: filteredFields,
+          confidence: extractedData.confidence || "medium",
+          documentTypeDetected: detectedType
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError instanceof Error && fetchError.name === "AbortError") {
+        console.error(`[${requestId}] AI request timed out after ${AI_TIMEOUT_MS}ms`);
+        return errorResponse("AI analysis timed out. Please try again.", 504, "timeout");
+      }
+      throw fetchError;
     }
-
-    console.log(`Extracted ${Object.keys(filteredFields).length} fields with ${extractedData.confidence} confidence, detected type: ${detectedType}`);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        extractedFields: filteredFields,
-        confidence: extractedData.confidence || "medium",
-        documentTypeDetected: detectedType
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-
   } catch (error) {
-    console.error("Error in analyze-document:", error);
-    return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Failed to analyze document",
-        errorType: "unknown",
-        success: false 
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    const duration = Date.now() - startTime;
+    console.error(`[${requestId}] Error in analyze-document after ${duration}ms:`, error);
+    return errorResponse(
+      error instanceof Error ? error.message : "Failed to analyze document",
+      500,
+      "unknown"
     );
   }
 });
