@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Car, Plus, AlertTriangle, CheckCircle, Clock, Trash2, 
-  ShieldCheck, ChevronRight, MoreHorizontal, Calendar, Fuel, Wrench
+  ShieldCheck, ChevronRight, MoreHorizontal, Calendar, Fuel, Wrench, Package
 } from "lucide-react";
 import { format, differenceInDays, isPast } from "date-fns";
 import {
@@ -30,7 +30,9 @@ import PendingTransfers from "@/components/transfers/PendingTransfers";
 import { PendingOwnershipClaims } from "@/components/transfers/PendingOwnershipClaims";
 import ChallanSummaryWidget from "@/components/dashboard/ChallanSummaryWidget";
 import ActiveAssistanceCard from "@/components/dashboard/ActiveAssistanceCard";
+import ActivePartsRequestCard from "@/components/dashboard/ActivePartsRequestCard";
 import { RequestAssistanceDialog } from "@/components/assistance/RequestAssistanceDialog";
+import { RequestPartsDialog } from "@/components/parts/RequestPartsDialog";
 import { DashboardLayout, DashboardSkeleton } from "@/components/layout/DashboardLayout";
 import { toTitleCase } from "@/lib/utils";
 
@@ -300,6 +302,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | undefined>();
   const [showAssistanceDialog, setShowAssistanceDialog] = useState(false);
+  const [showPartsDialog, setShowPartsDialog] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -385,10 +388,19 @@ const Dashboard = () => {
             <Button 
               variant="outline" 
               className="rounded-full"
+              onClick={() => setShowPartsDialog(true)}
+            >
+              <Package className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Request Parts</span>
+              <span className="sm:hidden">Parts</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="rounded-full"
               onClick={() => setShowAssistanceDialog(true)}
             >
               <Wrench className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Request Assistance</span>
+              <span className="hidden sm:inline">Assistance</span>
               <span className="sm:hidden">Assist</span>
             </Button>
             <Button asChild className="rounded-full">
@@ -414,6 +426,9 @@ const Dashboard = () => {
       {/* Active Assistance Requests */}
       <ActiveAssistanceCard vehicleIds={vehicles.map(v => v.id)} />
 
+      {/* Active Parts Requests */}
+      <ActivePartsRequestCard vehicleIds={vehicles.map(v => v.id)} />
+
       {/* Vehicle Grid - 2 columns on xl+ */}
       {vehicles.length === 0 ? (
         <EmptyState />
@@ -434,6 +449,18 @@ const Dashboard = () => {
       <RequestAssistanceDialog
         open={showAssistanceDialog}
         onOpenChange={setShowAssistanceDialog}
+        vehicles={vehicles.map(v => ({
+          id: v.id,
+          registration_number: v.registration_number,
+          maker_model: v.maker_model,
+          manufacturer: v.manufacturer,
+        }))}
+      />
+
+      {/* Request Parts Dialog */}
+      <RequestPartsDialog
+        open={showPartsDialog}
+        onOpenChange={setShowPartsDialog}
         vehicles={vehicles.map(v => ({
           id: v.id,
           registration_number: v.registration_number,

@@ -12,7 +12,7 @@ import {
   AlertTriangle, CheckCircle, Clock, Car, Calendar,
   User, Fuel, Palette, Users, Banknote, Hash,
   Gauge, FileCheck, RefreshCw, Loader2, Pencil, Save, X, Sparkles,
-  Settings, ChevronLeft, Shield, ChevronRight, Info, Wrench
+  Settings, ChevronLeft, Shield, ChevronRight, Info, Wrench, Package
 } from "lucide-react";
 import { format, differenceInDays, isPast, formatDistanceToNow } from "date-fns";
 import {
@@ -37,6 +37,7 @@ import ExpiryIntelligence from "@/components/vehicle/ExpiryIntelligence";
 import SellVehicleTab from "@/components/vehicle/SellVehicleTab";
 import ChallanTab from "@/components/vehicle/ChallanTab";
 import { RequestAssistanceDialog } from "@/components/assistance/RequestAssistanceDialog";
+import { RequestPartsDialog } from "@/components/parts/RequestPartsDialog";
 import { logVehicleEvent } from "@/lib/vehicleHistory";
 import { calculateVerificationProgress } from "@/lib/verificationChecks";
 import { toTitleCase } from "@/lib/utils";
@@ -208,6 +209,9 @@ const VehicleDetails = () => {
 
   // Assistance dialog state
   const [showAssistanceDialog, setShowAssistanceDialog] = useState(false);
+
+  // Parts dialog state
+  const [showPartsDialog, setShowPartsDialog] = useState(false);
 
   // Refresh vehicle data hook
   const { isRefreshing, canRefresh, getTimeUntilRefresh, refreshVehicleData } = useRefreshVehicle({
@@ -670,11 +674,28 @@ const VehicleDetails = () => {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setShowPartsDialog(true)}
+              className="hidden sm:flex"
+            >
+              <Package className="h-4 w-4 mr-1" />
+              Parts
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setShowAssistanceDialog(true)}
               className="hidden sm:flex"
             >
               <Wrench className="h-4 w-4 mr-1" />
               Assistance
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowPartsDialog(true)}
+              className="sm:hidden h-9 w-9"
+            >
+              <Package className="h-4 w-4" />
             </Button>
             <Button
               variant="ghost"
@@ -1133,6 +1154,19 @@ const VehicleDetails = () => {
       <RequestAssistanceDialog
         open={showAssistanceDialog}
         onOpenChange={setShowAssistanceDialog}
+        vehicles={vehicle ? [{
+          id: vehicle.id,
+          registration_number: vehicle.registration_number,
+          maker_model: vehicle.maker_model,
+          manufacturer: vehicle.manufacturer,
+        }] : []}
+        preselectedVehicleId={vehicle?.id}
+      />
+
+      {/* Request Parts Dialog */}
+      <RequestPartsDialog
+        open={showPartsDialog}
+        onOpenChange={setShowPartsDialog}
         vehicles={vehicle ? [{
           id: vehicle.id,
           registration_number: vehicle.registration_number,
